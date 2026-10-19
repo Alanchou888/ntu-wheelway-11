@@ -1,0 +1,717 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "id": "survey-direct",
+      "name": "實勘動線 direct（待命名）",
+      "description": "待團隊實勘後填寫",
+      "kind": "survey",
+      "originEntrance": {
+        "id": "survey-library",
+        "placeId": "library",
+        "name": "總圖書館入口（待實勘）",
+        "coordinate": [
+          121.5402933,
+          25.0175803
+        ],
+        "status": "unverified",
+        "verifiedAt": null,
+        "source": "待團隊實勘",
+        "photos": []
+      },
+      "destinationEntrance": {
+        "id": "survey-boya",
+        "placeId": "boya",
+        "name": "博雅教學館入口（待實勘）",
+        "coordinate": [
+          121.5372883,
+          25.0187301
+        ],
+        "status": "unverified",
+        "verifiedAt": null,
+        "source": "待團隊實勘",
+        "photos": []
+      },
+      "segments": [
+        {
+          "id": "survey-direct-1",
+          "name": "路段 1（待命名）",
+          "coordinates": [
+            [
+              121.5402933,
+              25.0175803
+            ],
+            [
+              121.5401915,
+              25.0175793
+            ],
+            [
+              121.5401153,
+              25.0175789
+            ],
+            [
+              121.5396982,
+              25.017577
+            ],
+            [
+              121.5393904,
+              25.0175756
+            ],
+            [
+              121.5391146,
+              25.0175743
+            ],
+            [
+              121.5389717,
+              25.0175737
+            ],
+            [
+              121.5389024,
+              25.0175973
+            ],
+            [
+              121.5388968,
+              25.0179358
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        },
+        {
+          "id": "survey-direct-2",
+          "name": "路段 2（待命名）",
+          "coordinates": [
+            [
+              121.5388968,
+              25.0179358
+            ],
+            [
+              121.5388942,
+              25.0180995
+            ],
+            [
+              121.5388892,
+              25.018401
+            ],
+            [
+              121.5382983,
+              25.0183929
+            ],
+            [
+              121.5378756,
+              25.0183871
+            ],
+            [
+              121.537874,
+              25.0184532
+            ],
+            [
+              121.5377573,
+              25.0184517
+            ],
+            [
+              121.5377149,
+              25.0184512
+            ],
+            [
+              121.5377053,
+              25.0184597
+            ],
+            [
+              121.5376209,
+              25.0184588
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        },
+        {
+          "id": "survey-direct-3",
+          "name": "路段 3（待命名）",
+          "coordinates": [
+            [
+              121.5376209,
+              25.0184588
+            ],
+            [
+              121.5376182,
+              25.0186169
+            ],
+            [
+              121.5376169,
+              25.018733
+            ],
+            [
+              121.5375856,
+              25.0187567
+            ],
+            [
+              121.5375866,
+              25.0188134
+            ],
+            [
+              121.5375289,
+              25.0188219
+            ],
+            [
+              121.5374912,
+              25.01883
+            ],
+            [
+              121.5374829,
+              25.0188629
+            ],
+            [
+              121.53748,
+              25.0189171
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        },
+        {
+          "id": "survey-direct-4",
+          "name": "路段 4（待命名）",
+          "coordinates": [
+            [
+              121.53748,
+              25.0189171
+            ],
+            [
+              121.5374841,
+              25.0189855
+            ],
+            [
+              121.537492,
+              25.0190364
+            ],
+            [
+              121.5375047,
+              25.0191041
+            ],
+            [
+              121.5374001,
+              25.0191139
+            ],
+            [
+              121.5372816,
+              25.0191141
+            ],
+            [
+              121.5372821,
+              25.0190852
+            ],
+            [
+              121.5372849,
+              25.0189284
+            ],
+            [
+              121.5372857,
+              25.0188823
+            ],
+            [
+              121.5372883,
+              25.0187301
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        }
+      ]
+    },
+    {
+      "id": "survey-gentle",
+      "name": "實勘動線 gentle（待命名）",
+      "description": "待團隊實勘後填寫",
+      "kind": "survey",
+      "originEntrance": {
+        "id": "survey-library",
+        "placeId": "library",
+        "name": "總圖書館入口（待實勘）",
+        "coordinate": [
+          121.5402933,
+          25.0175803
+        ],
+        "status": "unverified",
+        "verifiedAt": null,
+        "source": "待團隊實勘",
+        "photos": []
+      },
+      "destinationEntrance": {
+        "id": "survey-boya",
+        "placeId": "boya",
+        "name": "博雅教學館入口（待實勘）",
+        "coordinate": [
+          121.5372883,
+          25.0187301
+        ],
+        "status": "unverified",
+        "verifiedAt": null,
+        "source": "待團隊實勘",
+        "photos": []
+      },
+      "segments": [
+        {
+          "id": "survey-gentle-1",
+          "name": "路段 1（待命名）",
+          "coordinates": [
+            [
+              121.5402933,
+              25.0175803
+            ],
+            [
+              121.5404149,
+              25.0175816
+            ],
+            [
+              121.5404147,
+              25.0176539
+            ],
+            [
+              121.5404147,
+              25.017736
+            ],
+            [
+              121.5404146,
+              25.0177461
+            ],
+            [
+              121.5404134,
+              25.0178825
+            ],
+            [
+              121.5404125,
+              25.0179765
+            ],
+            [
+              121.5404116,
+              25.0180748
+            ],
+            [
+              121.5404112,
+              25.0181187
+            ],
+            [
+              121.5404094,
+              25.0183419
+            ],
+            [
+              121.5404087,
+              25.0184191
+            ],
+            [
+              121.5404082,
+              25.0185025
+            ],
+            [
+              121.540174,
+              25.0185017
+            ],
+            [
+              121.539956,
+              25.0185009
+            ],
+            [
+              121.5398137,
+              25.0185004
+            ],
+            [
+              121.5397419,
+              25.0185002
+            ],
+            [
+              121.5396407,
+              25.0184998
+            ],
+            [
+              121.5390996,
+              25.0184979
+            ],
+            [
+              121.5390985,
+              25.0185434
+            ],
+            [
+              121.5390979,
+              25.0185778
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        },
+        {
+          "id": "survey-gentle-2",
+          "name": "路段 2（待命名）",
+          "coordinates": [
+            [
+              121.5390979,
+              25.0185778
+            ],
+            [
+              121.5390918,
+              25.0189616
+            ],
+            [
+              121.5390876,
+              25.0192219
+            ],
+            [
+              121.5390873,
+              25.0192426
+            ],
+            [
+              121.5390867,
+              25.0192759
+            ],
+            [
+              121.5390851,
+              25.0193387
+            ],
+            [
+              121.538946,
+              25.0193368
+            ],
+            [
+              121.5389436,
+              25.0194506
+            ],
+            [
+              121.5389408,
+              25.019586
+            ],
+            [
+              121.5388648,
+              25.019585
+            ],
+            [
+              121.5387763,
+              25.0195838
+            ],
+            [
+              121.5385679,
+              25.019581
+            ],
+            [
+              121.5383666,
+              25.0195784
+            ],
+            [
+              121.5382559,
+              25.0195769
+            ],
+            [
+              121.5380778,
+              25.0195745
+            ],
+            [
+              121.5380462,
+              25.019624
+            ],
+            [
+              121.5380127,
+              25.0196236
+            ],
+            [
+              121.5380136,
+              25.0195502
+            ],
+            [
+              121.5379314,
+              25.0195497
+            ],
+            [
+              121.5379311,
+              25.0196227
+            ],
+            [
+              121.5379675,
+              25.019673
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        },
+        {
+          "id": "survey-gentle-3",
+          "name": "路段 3（待命名）",
+          "coordinates": [
+            [
+              121.5379675,
+              25.019673
+            ],
+            [
+              121.5379775,
+              25.0197125
+            ],
+            [
+              121.5379641,
+              25.0197563
+            ],
+            [
+              121.5379373,
+              25.0197861
+            ],
+            [
+              121.5378944,
+              25.0198432
+            ],
+            [
+              121.5377978,
+              25.0198347
+            ],
+            [
+              121.5377824,
+              25.0198541
+            ],
+            [
+              121.5377656,
+              25.0198657
+            ],
+            [
+              121.5377422,
+              25.0198699
+            ],
+            [
+              121.537718,
+              25.0198663
+            ],
+            [
+              121.5376991,
+              25.0198594
+            ],
+            [
+              121.5376641,
+              25.0198371
+            ],
+            [
+              121.5376256,
+              25.0198234
+            ],
+            [
+              121.5375999,
+              25.0198207
+            ],
+            [
+              121.5375739,
+              25.0198219
+            ],
+            [
+              121.537538,
+              25.019828
+            ],
+            [
+              121.5374951,
+              25.0198474
+            ],
+            [
+              121.5374719,
+              25.019842
+            ],
+            [
+              121.5374317,
+              25.0198237
+            ],
+            [
+              121.5373948,
+              25.0197988
+            ],
+            [
+              121.5373633,
+              25.0197654
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        },
+        {
+          "id": "survey-gentle-4",
+          "name": "路段 4（待命名）",
+          "coordinates": [
+            [
+              121.5373633,
+              25.0197654
+            ],
+            [
+              121.5373418,
+              25.019732
+            ],
+            [
+              121.5373345,
+              25.0197058
+            ],
+            [
+              121.5373258,
+              25.0196682
+            ],
+            [
+              121.5373231,
+              25.0196317
+            ],
+            [
+              121.5373278,
+              25.0195934
+            ],
+            [
+              121.5373385,
+              25.0195631
+            ],
+            [
+              121.5373586,
+              25.0195248
+            ],
+            [
+              121.53736,
+              25.0194962
+            ],
+            [
+              121.5373526,
+              25.0194683
+            ],
+            [
+              121.537355,
+              25.0194309
+            ],
+            [
+              121.5372725,
+              25.0194272
+            ],
+            [
+              121.5372726,
+              25.0193694
+            ],
+            [
+              121.5372477,
+              25.0193694
+            ],
+            [
+              121.5372477,
+              25.0193382
+            ],
+            [
+              121.5372475,
+              25.0191178
+            ],
+            [
+              121.5372816,
+              25.0191141
+            ],
+            [
+              121.5372821,
+              25.0190852
+            ],
+            [
+              121.5372849,
+              25.0189284
+            ],
+            [
+              121.5372857,
+              25.0188823
+            ],
+            [
+              121.5372883,
+              25.0187301
+            ]
+          ],
+          "status": "unverified",
+          "maxSlopePercent": null,
+          "minWidthM": null,
+          "stepHeightCm": null,
+          "hasStairs": null,
+          "surface": null,
+          "rampLengthM": null,
+          "closed": null,
+          "obstacles": [],
+          "photos": [],
+          "source": "待團隊實勘",
+          "sourceUrl": "https://www.openstreetmap.org/copyright",
+          "retrievedAt": "2026-10-19T11:24:57.681Z",
+          "verifiedAt": null
+        }
+      ]
+    }
+  ]
+}

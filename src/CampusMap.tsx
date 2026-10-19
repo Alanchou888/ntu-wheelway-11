@@ -1,0 +1,156 @@
+import { useEffect, useRef, useState } from 'react'
+import L from 'leaflet'
+import { Layers3, MapPin, Scan, X, CloudOff } from 'lucide-react'
+import type { Campus, Coordinate, Mode, Route, Screen } from './types'
+import { routeCoordinates } from './routes'
+
+interface Props {
+  campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
+  onSelectRoute: (id: string) => void; onSelectSegment: (id: string) => void
+}
+const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
+export const colors = { gentle: '#1b7160', direct: '#7164b6', survey: '#1b7160' }
+
+export default function CampusMap(props: Props) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<L.Map | null>(null)
+  const routesRef = useRef<L.LayerGroup | null>(null)
+  const facilitiesRef = useRef<L.LayerGroup | null>(null)
+  const wmsRef = useRef<L.TileLayer.WMS | null>(null)
+  const actions = useRef(props)
+  actions.current = props
+  const [layersOpen, setLayersOpen] = useState(false)
+  const [showCampus, setShowCampus] = useState(true)
+  const [showRamps, setShowRamps] = useState(false)
+  const [baseError, setBaseError] = useState(false)
+  const [campusError, setCampusError] = useState(false)
+
+  const refit = () => {
+    const map = mapRef.current
+    if (!map) return
+    const points = props.routes.flatMap(routeCoordinates)
+    if (points.length) map.fitBounds(L.latLngBounds(points.map(latlng)), { padding: [65, 65], maxZoom: 18, animate: false })
+    else map.fitBounds(L.latLngBounds(props.campus.places.map(p => latlng(p.coordinate))), { padding: [65, 65], maxZoom: 18, animate: false })
+  }
+
+  useEffect(() => {
+    if (!rootRef.current) return
+    const map = L.map(rootRef.current, { zoomControl: false, minZoom: 15, maxZoom: 20, scrollWheelZoom: true, attributionControl: true }).setView([25.0182, 121.5386], 17)
+    mapRef.current = map
+    L.control.zoom({ position: 'bottomright' }).addTo(map)
+    map.attributionControl.setPrefix(false)
+    const base = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxNativeZoom: 19, maxZoom: 20, className: 'base-tiles',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+    }).addTo(map)
+    base.on('tileerror', () => setBaseError(true))
+    // Keep a small attributed vector backdrop usable when external tiles fail.
+    const pane = map.createPane('campusContext')
+    pane.style.zIndex = '210'
+    pane.style.pointerEvents = 'none'
+    if (props.campus.context) {
+      L.geoJSON(props.campus.context, {
+        pane: 'campusContext', interactive: false,
+        style: feature => {
+          const kind = feature?.properties?.kind
+          if (kind === 'road') return { color: '#fffdf8', opacity: .74, weight: 5, fillOpacity: .1 }
+          if (kind === 'green') return { color: '#b8cfaa', weight: 1, fillColor: '#c5d8b8', fillOpacity: .35, opacity: .4 }
+          if (kind === 'water') return { color: '#93bdc3', weight: 1, fillColor: '#a8cdd0', fillOpacity: .6 }
+          return { color: '#b7c3bc', weight: 1, fillColor: '#d7dfd6', fillOpacity: .38, opacity: .6 }
+        },
+      }).addTo(map)
+    }
+    wmsRef.current = L.tileLayer.wms('https://map.ntu.edu.tw/geoNtuPublic/wms', {
+      layers: 'gis:building_incamp,gis:ntu_road', format: 'image/png', transparent: true,
+      version: '1.1.1', opacity: .26, maxZoom: 20, attribution: '<a href="https://map.ntu.edu.tw/" target="_blank" rel="noopener noreferrer">臺大校園 WMS</a>',
+    })
+    wmsRef.current.on('tileerror', () => setCampusError(true))
+    routesRef.current = L.layerGroup().addTo(map)
+    facilitiesRef.current = L.layerGroup().addTo(map)
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
+    observer.observe(rootRef.current)
+    return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null }
+  }, [props.campus])
+
+  useEffect(() => {
+    const map = mapRef.current, wms = wmsRef.current
+    if (!map || !wms) return
+    if (showCampus) wms.addTo(map)
+    else wms.removeFrom(map)
+  }, [showCampus, props.campus])
+
+  useEffect(() => {
+    const group = routesRef.current
+    if (!group) return
+    group.clearLayers()
+    const focus = props.screen === 'detail' || props.screen === 'confirm'
+    const selected = props.routes.find(r => r.id === props.selectedId) ?? props.routes[0]
+    props.routes.forEach(route => {
+      const isSelected = route.id === props.selectedId
+      const color = props.mode === 'survey' ? '#82918a' : colors[route.id as keyof typeof colors] ?? colors.survey
+      const points = routeCoordinates(route).map(latlng)
+      L.polyline(points, { color: '#ffffff', weight: isSelected ? 10 : 8, opacity: focus && !isSelected ? .4 : .9, interactive: false, lineCap: 'round' }).addTo(group)
+      const line = L.polyline(points, { color, weight: isSelected ? 5.5 : 4, opacity: focus && !isSelected ? .22 : isSelected ? 1 : .65, dashArray: props.mode === 'survey' ? '6 9' : undefined })
+      line.on('click', () => actions.current.onSelectRoute(route.id)).addTo(group)
+      if (isSelected && props.screen === 'detail') {
+        route.segments.forEach(segment => {
+          const active = segment.id === props.segmentId
+          L.polyline(segment.coordinates.map(latlng), { color: active ? '#e09c37' : color, weight: active ? 8 : 5, opacity: 1 })
+            .on('click', () => actions.current.onSelectSegment(segment.id)).addTo(group)
+          if (active) L.circleMarker(latlng(segment.coordinates[0]), { radius: 6, color: '#fff', weight: 2, fillColor: '#d18b21', fillOpacity: 1 }).addTo(group)
+        })
+      }
+    })
+    if (selected) {
+      ;[selected.originEntrance, selected.destinationEntrance].forEach((entrance, i) => {
+        const icon = L.divIcon({ className: 'endpoint-marker', html: `<span class="endpoint-dot ${i ? 'destination' : ''}">${i ? 'B' : 'A'}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] })
+        const label = document.createElement('span')
+        label.textContent = `${entrance.placeId === 'library' ? '總圖書館' : '博雅教學館'}${props.mode === 'demo' ? ' · 示範入口' : ' · 入口'}`
+        L.marker(latlng(entrance.coordinate), { icon, keyboard: false }).bindTooltip(label, { permanent: true, direction: i ? 'top' : 'bottom', offset: [0, i ? -17 : 17], className: 'entrance-label' }).addTo(group)
+      })
+    } else {
+      props.campus.places.forEach(place => {
+        const label = document.createElement('span')
+        label.textContent = `${place.name} · 建物中心`
+        L.circleMarker(latlng(place.coordinate), { radius: 7, color: '#fff', weight: 2, fillColor: '#6d8277', fillOpacity: 1 }).bindTooltip(label, { permanent: true, direction: 'top', className: 'entrance-label' }).addTo(group)
+      })
+    }
+  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus])
+
+  useEffect(() => {
+    const group = facilitiesRef.current
+    if (!group) return
+    group.clearLayers()
+    if (showRamps) props.campus.facilities.forEach(facility => {
+      const content = document.createElement('div')
+      const title = document.createElement('strong')
+      title.textContent = facility.name
+      const body = document.createElement('p')
+      body.textContent = '公開斜坡道點位，尚未由團隊查核。'
+      content.append(title, body)
+      L.circleMarker(latlng(facility.coordinate), { radius: 6, color: '#fff', weight: 2, fillColor: '#c38a39', fillOpacity: .9 }).bindPopup(content).addTo(group)
+    })
+  }, [showRamps, props.campus])
+
+  useEffect(() => { refit() }, [props.routes, props.campus]) // Route direction and viewport are independent of the selected segment.
+
+  return <section className="map-shell" aria-label="臺大校園路線地圖">
+    <div className="map-canvas" ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />
+    <div className="map-title-pill"><span className="live-dot" /><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖 × 博雅</span></div>
+    <div className="map-actions">
+      <button className={`map-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖層" aria-expanded={layersOpen} title="地圖圖層"><Layers3 size={20} /></button>
+      <button className="map-tool" onClick={refit} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} /></button>
+    </div>
+    {layersOpen && <div className="layer-popover">
+      <div className="layer-title">地圖圖層<button className="icon-button" onClick={() => setLayersOpen(false)} aria-label="關閉圖層選單"><X size={17} /></button></div>
+      <label><input type="checkbox" checked={showCampus} onChange={e => setShowCampus(e.target.checked)} /><span>臺大校園建物與道路</span></label>
+      <label><input type="checkbox" checked={showRamps} onChange={e => setShowRamps(e.target.checked)} /><span>公開斜坡道 <small>{props.campus.facilities.length} 個</small></span></label>
+      <p>公開點位尚未實地查核。</p>
+    </div>}
+    {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
+    <div className="map-legend">
+      {props.mode === 'demo' ? <><span><i className="legend-line gentle" />較平緩</span><span><i className="legend-line direct" />距離較短</span></> : <span><MapPin size={15} />公開圖資，路線待查核</span>}
+    </div>
+    <div className="map-north" aria-hidden="true"><span>↑</span>N</div>
+  </section>
+}

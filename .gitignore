@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.sites-local/
+.openai/local/
+output/
+*.local
+*.tar.gz
+.playwright-cli/
+*.tsbuildinfo
+.sites-runtime/
+.env*
