@@ -56,7 +56,7 @@ export function buildDemoRoutes(campus: Campus): Route[] {
 }
 
 export function metrics(route: Route): RouteMetrics {
-  const complete = (key: 'maxSlopePercent' | 'minWidthM' | 'stepHeightCm') => route.segments.every(s => typeof s[key] === 'number' && Number.isFinite(s[key]) && s[key]! >= 0)
+  const complete = (key: 'maxSlopePercent' | 'minWidthM' | 'stepHeightCm') => route.segments.length > 0 && route.segments.every(s => typeof s[key] === 'number' && Number.isFinite(s[key]) && s[key]! >= 0)
   return {
     distanceM: route.segments.reduce((n, s) => n + lineDistance(s.coordinates), 0),
     maxSlopePercent: complete('maxSlopePercent') ? Math.max(...route.segments.map(s => s.maxSlopePercent!)) : null,
@@ -66,9 +66,47 @@ export function metrics(route: Route): RouteMetrics {
   }
 }
 
+export interface Bottleneck { kind: 'slope' | 'width'; value: number; segmentIds: string[] }
+export function bottlenecks(route: Route): Bottleneck[] {
+  const m = metrics(route)
+  const result: Bottleneck[] = []
+  if (m.maxSlopePercent !== null) result.push({ kind: 'slope', value: m.maxSlopePercent, segmentIds: route.segments.filter(s => s.maxSlopePercent === m.maxSlopePercent).map(s => s.id) })
+  if (m.minWidthM !== null && m.minWidthM > 0) result.push({ kind: 'width', value: m.minWidthM, segmentIds: route.segments.filter(s => s.minWidthM === m.minWidthM).map(s => s.id) })
+  return result
+}
+export function lineMidpoint(points: Coordinate[]): Coordinate {
+  const half = lineDistance(points) / 2
+  let traversed = 0
+  for (let i = 1; i < points.length; i++) {
+    const length = distance(points[i - 1], points[i])
+    if (traversed + length >= half && length > 0) {
+      const t = (half - traversed) / length
+      return [points[i - 1][0] + (points[i][0] - points[i - 1][0]) * t, points[i - 1][1] + (points[i][1] - points[i - 1][1]) * t]
+    }
+    traversed += length
+  }
+  return points[0]
+}
+export function comparisonDifference(a: Route, b: Route) {
+  const am = metrics(a), bm = metrics(b)
+  return {
+    distanceM: Math.round(bm.distanceM) - Math.round(am.distanceM),
+    slopePoints: am.maxSlopePercent === null || bm.maxSlopePercent === null ? null : Number((bm.maxSlopePercent - am.maxSlopePercent).toFixed(2)),
+    widthM: am.minWidthM === null || bm.minWidthM === null ? null : Number((bm.minWidthM - am.minWidthM).toFixed(2)),
+  }
+}
+
 function validLine(points: Coordinate[]): boolean { return points.length >= 2 && points.every(p => p.length === 2 && p.every(Number.isFinite) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90) && lineDistance(points) > 0 }
-function verifiedDate(value: string | null): boolean { return !!value && Number.isFinite(Date.parse(value)) }
-function verifiedEntrance(entrance: Entrance): boolean { return entrance.status === 'verified' && verifiedDate(entrance.verifiedAt) && !!entrance.source && entrance.photos.length > 0 && entrance.coordinate.length === 2 && entrance.coordinate.every(Number.isFinite) }
+export function validSurveyDate(value: string | null): boolean {
+  if (!value || !Number.isFinite(Date.parse(value))) return false
+  const day = value.slice(0, 10)
+  const date = new Date(`${day}T00:00:00Z`)
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === day && day <= new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+function hasEvidence(item: Entrance | Segment): boolean {
+  return item.status === 'verified' && validSurveyDate(item.verifiedAt) && item.source.trim().length >= 3 && !['待團隊實勘', '待實勘'].includes(item.source.trim()) && item.photos.length > 0 && item.photos.every(p => !!p.src.trim() && !!p.alt.trim() && !!p.caption.trim())
+}
+function verifiedEntrance(entrance: Entrance): boolean { return hasEvidence(entrance) && entrance.coordinate.length === 2 && entrance.coordinate.every(Number.isFinite) && Math.abs(entrance.coordinate[0]) <= 180 && Math.abs(entrance.coordinate[1]) <= 90 }
 export function isEligible(route: Route, mode: Mode): boolean {
   if (!route.segments.length || !route.segments.every(s => validLine(s.coordinates) && !s.closed && s.hasStairs === false && s.status !== 'blocked')) return false
   // Unknown data and demo flags never promote a route into the surveyed collection.
@@ -76,7 +114,7 @@ export function isEligible(route: Route, mode: Mode): boolean {
   if (route.kind !== 'survey' || !verifiedEntrance(route.originEntrance) || !verifiedEntrance(route.destinationEntrance)) return false
   const m = metrics(route)
   if (m.maxSlopePercent === null || m.minWidthM === null || m.minWidthM <= 0 || m.maxStepCm === null) return false
-  if (!route.segments.every(s => s.status === 'verified' && verifiedDate(s.verifiedAt) && !!s.source && !!s.surface && s.closed === false && s.rampLengthM !== null && s.rampLengthM >= 0 && s.photos.length > 0)) return false
+  if (!route.segments.every(s => hasEvidence(s) && !!s.surface?.trim() && s.closed === false && s.rampLengthM !== null && Number.isFinite(s.rampLengthM) && s.rampLengthM >= 0)) return false
   const points = routeCoordinates(route)
   if (distance(points[0], route.originEntrance.coordinate) > 2 || distance(points.at(-1)!, route.destinationEntrance.coordinate) > 2) return false
   return route.segments.slice(1).every((s, i) => distance(route.segments[i].coordinates.at(-1)!, s.coordinates[0]) <= 1)
@@ -105,7 +143,7 @@ export function toHash(state: NavigationState): string { return `#${new URLSearc
 export function fromHash(hash: string): NavigationState {
   const p = new URLSearchParams(hash.replace(/^#/, ''))
   const screen = p.get('screen')
-  return { screen: ['setup', 'compare', 'detail', 'confirm'].includes(screen ?? '') ? screen as NavigationState['screen'] : 'setup',
+  return { screen: ['setup', 'compare', 'detail', 'confirm', 'editor'].includes(screen ?? '') ? screen as NavigationState['screen'] : 'setup',
     mode: p.get('mode') === 'survey' ? 'survey' : 'demo', origin: p.get('from') === 'boya' ? 'boya' : 'library',
     wheelchair: p.get('chair') === 'electric' ? 'electric' : 'manual', preference: p.get('prefer') === 'short' ? 'short' : 'gentle',
     routeId: p.get('route') ?? 'gentle', segmentId: p.get('segment') ?? '' }

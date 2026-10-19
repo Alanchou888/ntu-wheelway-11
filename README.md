@@ -1,6 +1,16 @@
 # 輪行臺大 WHEELWAY
 
-第 11 組輪椅友善路徑導航系統的 Web App v1。依 Proposal-2 與 Project Handout v4 製作，支援「設定條件 → 比較路線 → 檢視路段 → 確認動線」。
+第 11 組輪椅友善路徑導航系統的 Web App v1.1。依 Proposal-2 與 Project Handout v4 製作，支援「設定條件 → 比較路線 → 檢視路段 → 確認動線」。
+
+公開測試網址：https://ntu-wheelway-11.brainyshell5.chatgpt.site/
+
+## v1.1 新增
+
+- 實勘編輯器：右上角「實勘編輯」可建立兩條空白動線草稿，逐段填寫量測、入口座標、照片、來源及日期。支援目前瀏覽器自動儲存、JSON 匯入匯出與 CSV 彙整。
+- 差異摘要：比較表直接呈現距離、最大坡度及最窄路寬，以及多走多少公尺、坡度差幾個百分點、路寬差多少公尺。
+- 瓶頸標記：標出所選路線最陡與最窄的路段，保留並列情況。地圖標記與清單可互相切換，地圖標記支援 Enter 與空白鍵。
+
+草稿只存在當前瀏覽器的 IndexedDB，公開網址不包含本機草稿。網站不會自動發布草稿。將 JSON 交給團隊審核後，才可接入公開的已查核路線。清除網站資料或更換裝置會失去本機紀錄，請定期匯出備份。
 
 ## 啟動
 
@@ -38,7 +48,7 @@ npm.cmd run preview
 
 ## 技術與 AI 使用紀錄
 
-使用 React、TypeScript、Vite、Leaflet 與 Lucide。無登入、資料庫或付費 API key。
+使用 React、TypeScript、Vite、Leaflet 與 Lucide。草稿以瀏覽器 IndexedDB 儲存，無須登入、雲端資料庫或付費 API key。
 
 本版由 AI 協助實作介面、公開資料處理及程式驗證。保留提案的四步流程，將桌面呈現改為清單與地圖並排，手機呈現改為地圖上方、操作下方。未有實勘照片的區塊保留缺圖提示。示範模式與查核模式分開，避免將模擬數值誤認為通行證據。這些實作選擇仍待真實使用者測試與團隊迭代。
 
@@ -51,9 +61,10 @@ npm.cmd run preview
 ```powershell
 npx.cmd --yes --package @playwright/cli playwright-cli -s=wheelway open http://localhost:5173/
 npx.cmd --yes --package @playwright/cli playwright-cli -s=wheelway run-code --filename scripts/browser-qa.js
+npx.cmd --yes --package @playwright/cli playwright-cli -s=wheelway run-code --filename scripts/browser-v11-qa.js
 npx.cmd --yes --package @playwright/cli playwright-cli -s=wheelway run-code --filename scripts/browser-failure-qa.js
 npx.cmd --yes --package @playwright/cli playwright-cli -s=wheelway run-code --filename scripts/accessibility-qa.js
 npx.cmd --yes --package @playwright/cli playwright-cli -s=wheelway close
 ```
 
-第二份腳本會故意模擬 HTTP 錯誤、圖層故障與圖片遺失，因此瀏覽器網路紀錄會出現預期錯誤。腳本會檢查介面復原、清單可用性及未捕捉的 JavaScript 例外。自動無障礙檢查使用 axe-core，不能取代真實輔助科技與使用者測試。
+`browser-failure-qa.js` 會故意模擬 HTTP 錯誤、圖層故障與圖片遺失，因此瀏覽器網路紀錄會出現預期錯誤。腳本會檢查介面復原、清單可用性及未捕捉的 JavaScript 例外。`browser-v11-qa.js` 會在獨立的自動測試瀏覽器填入明確標示的程式測試資料，檢查本機儲存、照片與匯入匯出，測試資料僅寫入忽略的 `output/`，不放入公開實勘資料。自動無障礙檢查使用 axe-core，不能取代真實輔助科技與使用者測試。

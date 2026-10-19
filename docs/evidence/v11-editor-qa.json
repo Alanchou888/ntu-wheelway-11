@@ -1,0 +1,143 @@
+{
+  "results": [
+    {
+      "name": "Comparison shows signed distance, slope percentage points, and width differences",
+      "pass": true
+    },
+    {
+      "name": "Map bottleneck is keyboard-operable and opens its route segment",
+      "pass": true
+    },
+    {
+      "name": "Tied narrowest segments are both listed",
+      "pass": true
+    },
+    {
+      "name": "Bottleneck list updates the selected segment",
+      "pass": true
+    },
+    {
+      "name": "Fresh survey measurements stay empty rather than copying demo values",
+      "pass": true
+    },
+    {
+      "name": "Incomplete evidence cannot be marked verified",
+      "pass": true
+    },
+    {
+      "name": "Field values, photo, caption, date and explicit confirmation complete a single record",
+      "pass": true
+    },
+    {
+      "name": "Changing evidence revokes prior verification and confirmation",
+      "pass": true
+    },
+    {
+      "name": "IndexedDB draft survives a full reload including StrictMode",
+      "pass": true
+    },
+    {
+      "name": "Saved measurements restored",
+      "pass": true
+    },
+    {
+      "name": "Local photo restored with the field record",
+      "pass": true
+    },
+    {
+      "name": "JSON export preserves evidence and individual statuses without promoting the route",
+      "pass": true
+    },
+    {
+      "name": "CSV download has UTF-8 BOM and field evidence",
+      "pass": true
+    },
+    {
+      "name": "Invalid import preserves the current draft",
+      "pass": true
+    },
+    {
+      "name": "Valid JSON imports all records without changing their statuses",
+      "pass": true
+    },
+    {
+      "name": "Keyboard-editable entrance coordinates flag geometry mismatch and support explicit endpoint synchronization",
+      "pass": true
+    },
+    {
+      "name": "Changing route geometry revokes the adjacent segment verification",
+      "pass": true
+    },
+    {
+      "name": "Storage denial retains the in-memory draft and offers export",
+      "pass": true
+    },
+    {
+      "name": "Successful storage retry clears the obsolete failure message",
+      "pass": true
+    },
+    {
+      "name": "Editor has no horizontal overflow: 390px entrance",
+      "pass": true
+    },
+    {
+      "name": "Editor has no horizontal overflow: 390px segment",
+      "pass": true
+    },
+    {
+      "name": "Editor has no horizontal overflow: 1440px entrance",
+      "pass": true
+    },
+    {
+      "name": "Editor has no horizontal overflow: 1440px segment",
+      "pass": true
+    },
+    {
+      "name": "Editor layout fits 360px mobile viewport",
+      "pass": true
+    },
+    {
+      "name": "Mobile editor primary controls meet 44px target size",
+      "pass": true
+    },
+    {
+      "name": "Local draft never silently enters the public surveyed route collection",
+      "pass": true
+    },
+    {
+      "name": "Unreadable local records pause automatic storage and preserve the previous contents",
+      "pass": true
+    },
+    {
+      "name": "No uncaught JavaScript errors across editor and import/export flow",
+      "pass": true
+    },
+    {
+      "name": "Editor has no automated WCAG A/AA violations: [{\"width\":390,\"form\":\"entrance\",\"violations\":[]},{\"width\":390,\"form\":\"segment\",\"violations\":[]},{\"width\":1440,\"form\":\"entrance\",\"violations\":[]},{\"width\":1440,\"form\":\"segment\",\"violations\":[]}]",
+      "pass": true
+    }
+  ],
+  "accessibility": [
+    {
+      "width": 390,
+      "form": "entrance",
+      "violations": []
+    },
+    {
+      "width": 390,
+      "form": "segment",
+      "violations": []
+    },
+    {
+      "width": 1440,
+      "form": "entrance",
+      "violations": []
+    },
+    {
+      "width": 1440,
+      "form": "segment",
+      "violations": []
+    }
+  ],
+  "errors": []
+}

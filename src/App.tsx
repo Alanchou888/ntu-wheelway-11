@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Accessibility, ArrowDownUp, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, Copy, Footprints, GraduationCap, Image as ImageIcon, Info, Layers3, Leaf, LoaderCircle, MapPin, Mountain, MoveHorizontal, Route as RouteIcon, ShieldCheck, SlidersHorizontal, TriangleAlert, X, Zap } from 'lucide-react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Accessibility, ArrowDownUp, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, Copy, Footprints, GraduationCap, Image as ImageIcon, Info, Leaf, LoaderCircle, MapPin, Mountain, MoveHorizontal, Route as RouteIcon, ShieldCheck, SlidersHorizontal, TriangleAlert, X, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CampusMap from './CampusMap'
 import type { Campus, Entrance, Mode, NavigationState, Photo, Route, Screen, Segment, SurveyData } from './types'
 import { buildDemoRoutes, candidateRoutes, formatDate, formatDistance, fromHash, isCampus, lineDistance, metrics, placeNames, reverseRoute, segmentLabel, toHash } from './routes'
+import { BottleneckList, ComparisonSummary } from './RouteInsights'
+import { parseSurveyData } from './survey'
+
+const SurveyEditor = lazy(() => import('./SurveyEditor'))
 
 const screens: { id: Screen; label: string; icon: LucideIcon }[] = [
   { id: 'setup', label: '設定條件', icon: SlidersHorizontal },
@@ -97,11 +101,7 @@ export default function App() {
       fetch('/data/campus.json', { signal: controller.signal }).then(async response => { if (!response.ok) throw new Error('snapshot'); const data: unknown = await response.json(); if (!isCampus(data)) throw new Error('format'); return data }),
       fetch('/data/surveyed-routes.json', { signal: controller.signal }).then(async response => {
         if (!response.ok) throw new Error('survey')
-        const data = await response.json() as SurveyData
-        if (data.version !== 1 || !Array.isArray(data.routes)) throw new Error('format')
-        // Fail closed when an edited survey file is malformed.
-        data.routes.forEach(route => { if (route.kind !== 'survey' || !Array.isArray(route.segments) || !route.originEntrance?.photos || !route.destinationEntrance?.photos) throw new Error('format'); candidateRoutes([route], 'survey', 'short') })
-        return data
+        return parseSurveyData(await response.json())
       }),
     ]).then(([base, field]) => {
       if (controller.signal.aborted) return
@@ -119,7 +119,7 @@ export default function App() {
   const selected = routes.find(r => r.id === state.routeId) ?? routes[0]
   const activeSegment = selected?.segments.find(s => s.id === state.segmentId) ?? selected?.segments[0]
   const destination = state.origin === 'library' ? 'boya' : 'library'
-  const step = screens.findIndex(s => s.id === state.screen)
+  const step = state.screen === 'editor' ? 0 : screens.findIndex(s => s.id === state.screen)
   const isDemo = state.mode === 'demo'
 
   useEffect(() => {
@@ -140,16 +140,16 @@ export default function App() {
   }
 
   return <div className="app">
-    <a href="#content-panel" className="skip-link" onClick={e => { e.preventDefault(); panelRef.current?.focus() }}>跳至操作內容</a>
+    <a href="#content-panel" className="skip-link" onClick={e => { e.preventDefault(); document.getElementById('content-panel')?.focus() }}>跳至操作內容</a>
     <header className="topbar"><button className="brand" onClick={() => navigate({ screen: 'setup' })} aria-label="輪行臺大，返回設定"><span className="brand-symbol"><Accessibility size={26} strokeWidth={1.8} /></span><span><strong>輪行臺大<span className="brand-english">WHEELWAY</span></strong><small>每一段路，先看清楚</small></span></button>
-      <div className="header-right"><span className="group-label">NTU CAMPUS <b>第 11 組</b></span><button className="source-button" onClick={() => setShowSources(true)} disabled={!campus}><Info size={17} /><span>資料來源</span></button></div>
+      <div className="header-right"><span className="group-label">NTU CAMPUS <b>第 11 組</b></span><button className="source-button editor-link" onClick={() => navigate({ screen: 'editor' })} disabled={!campus} aria-current={state.screen === 'editor' ? 'page' : undefined}><ClipboardCheck size={17} /><span>實勘編輯</span></button><button className="source-button" onClick={() => setShowSources(true)} disabled={!campus}><Info size={17} /><span>資料來源</span></button></div>
     </header>
     <div className="journey-bar"><nav className="stepper" aria-label="選路流程">{screens.map((item, i) => { const Icon = item.icon; return <button key={item.id} className={`step ${i === step ? 'current' : ''} ${i < step ? 'completed' : ''}`} disabled={i > step} aria-current={i === step ? 'step' : undefined} onClick={() => navigate({ screen: item.id })}><span className="step-index">{i < step ? <Check size={13} /> : i + 1}</span><Icon size={16} className="step-icon" /><span>{item.label}</span>{i < 3 && <ChevronRight size={13} className="step-chevron" />}</button> })}</nav>
       <div className="mode-switch" role="group" aria-label="資料模式"><button className={isDemo ? 'selected' : ''} aria-pressed={isDemo} onClick={() => chooseMode('demo')}>示範模式</button><button className={!isDemo ? 'selected' : ''} aria-pressed={!isDemo} onClick={() => chooseMode('survey')}>已查核路線</button></div>
     </div>
-    <div className={`mode-strip ${isDemo ? 'demo' : 'survey'}`} role="status">{isDemo ? <><CircleHelp size={15} /><strong>示範模式</strong><span>坡度、路寬與入口尚未實勘</span><span className="strip-extra">公開地圖 × 模擬路況，供選路流程測試</span></> : <><ShieldCheck size={15} /><strong>查核模式</strong><span>僅顯示已完成實地查核的完整動線</span></>}</div>
+    <div className={`mode-strip ${isDemo && state.screen !== 'editor' ? 'demo' : 'survey'}`} role="status">{state.screen === 'editor' ? <><ClipboardCheck size={15} /><strong>本機實勘草稿</strong><span>空白量測，填寫後匯出供團隊審核</span></> : isDemo ? <><CircleHelp size={15} /><strong>示範模式</strong><span>坡度、路寬與入口尚未實勘</span><span className="strip-extra">公開地圖 × 模擬路況，供選路流程測試</span></> : <><ShieldCheck size={15} /><strong>查核模式</strong><span>僅顯示已完成實地查核的完整動線</span></>}</div>
 
-    {loading ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。</p><button className="button primary" onClick={() => setRetry(retry + 1)}>重新載入圖資</button></main> : <main className="workspace">
+    {loading ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。</p><button className="button primary" onClick={() => setRetry(retry + 1)}>重新載入圖資</button></main> : state.screen === 'editor' ? <Suspense fallback={<main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>載入實勘編輯器</h1></main>}><SurveyEditor campus={campus} onClose={() => navigate({ screen: 'setup' })} /></Suspense> : <main className="workspace">
       <aside className="content-panel" id="content-panel" tabIndex={-1} ref={panelRef} aria-label="路線設定與資訊">
         <div className="panel-main" key={state.screen}>
           {state.screen === 'setup' && <>
@@ -169,12 +169,13 @@ export default function App() {
             <button className="back-link" onClick={() => navigate({ screen: 'setup' })}><ArrowLeft size={17} />修改條件</button><p className="panel-eyebrow">COMPARE YOUR OPTIONS</p><h1 id="panel-heading" tabIndex={-1}>找到 {routes.length} 條{isDemo ? '示範' : ''}動線</h1><p className="route-pair"><span>{placeNames[state.origin]}</span><ArrowRight size={15} /><span>{placeNames[destination]}</span></p>
             <div className="compare-preference"><span>{state.wheelchair === 'manual' ? '手動輪椅' : '電動輪椅'}</span><span>{state.preference === 'gentle' ? '依最大坡度排序' : '依距離排序'}</span></div>
             <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'direct' ? 'direct' : 'gentle'} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Leaf size={21} /> : <RouteIcon size={21} />}</span><div><strong>{route.name}</strong><span>{route.id === 'direct' ? '優先縮短路程' : '優先較小坡度'}</span></div>{i === 0 && <span className="preference-tag">符合偏好</span>}</div><RouteStats route={route} /><div className="route-card-surface"><span><Check size={14} />無階梯{isDemo ? '（示範）' : ''}</span><span>{route.segments[0]?.surface}</span></div><div className="route-card-footer"><span>{isDemo ? '示範路況 · 尚未實勘' : '全程及入口已查核'}</span><strong>檢視路段<ArrowRight size={16} /></strong></div></button>)}</div>
-            {routes.length >= 2 && <div className="comparison-note"><Layers3 size={20} /><p>兩條動線相差 <strong>{formatDistance(Math.abs(Math.round(metrics(routes[0]).distanceM) - Math.round(metrics(routes[1]).distanceM)))}</strong>。點開路段，看看坡度、路寬與路面差異。</p></div>}
+            <ComparisonSummary routes={routes} />
             <p className="selection-note">路線沒有統一的最佳解，請依自己的需求比較。</p>
           </>}
 
           {state.screen === 'detail' && selected && activeSegment && <>
             <button className="back-link" onClick={() => navigate({ screen: 'compare' })}><ArrowLeft size={17} />返回比較</button><p className="panel-eyebrow">LOOK A LITTLE CLOSER</p><h1 id="panel-heading" tabIndex={-1}>每一段，都看得到</h1><div className="detail-route-title"><span className={`route-color-dot ${selected.id}`} />{selected.name}<span>{formatDistance(metrics(selected).distanceM)}</span></div>
+            <BottleneckList route={selected} onSelect={id => navigate({ segmentId: id })} />
             <div className="segment-tabs" role="group" aria-label="選擇路段">{selected.segments.map((segment, i) => <button key={segment.id} aria-label={`路段 ${i + 1}：${segment.name}`} aria-pressed={activeSegment.id === segment.id} className={activeSegment.id === segment.id ? 'active' : ''} onClick={() => navigate({ segmentId: segment.id })}><span>{i + 1}</span><div><strong>{segment.name}</strong><small>{formatDistance(lineDistance(segment.coordinates))}</small></div><ChevronRight size={15} /></button>)}</div>
             <SegmentInfo segment={activeSegment} />
             <div className="sticky-panel-actions"><button className="button primary wide" onClick={() => navigate({ screen: 'confirm', routeId: selected.id })}>選擇這條路線<Check size={18} /></button></div>
@@ -190,7 +191,7 @@ export default function App() {
         </div>
         <footer className="panel-footer"><span><GraduationCap size={15} />課程測試原型</span><button onClick={() => setShowSources(true)}>圖資快照 {formatDate(campus.retrievedAt)} <ChevronRight size={13} /></button></footer>
       </aside>
-      <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} onSelectRoute={id => navigate({ routeId: id, segmentId: '' })} onSelectSegment={id => navigate({ segmentId: id })} />
+      <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} onSelectRoute={id => navigate({ routeId: id, segmentId: '' })} onSelectSegment={id => navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id })} />
     </main>}
     {showSources && campus && <SourceDialog campus={campus} onClose={() => setShowSources(false)} />}
     <div className="sr-only" aria-live="polite">{state.screen === 'detail' && activeSegment ? `目前路段：${activeSegment.name}` : ''}</div>

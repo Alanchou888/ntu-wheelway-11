@@ -6,7 +6,7 @@ export type Verification = 'demo' | 'unverified' | 'verified' | 'blocked'
 export type Mode = 'demo' | 'survey'
 export type Preference = 'gentle' | 'short'
 export type Wheelchair = 'manual' | 'electric'
-export type Screen = 'setup' | 'compare' | 'detail' | 'confirm'
+export type Screen = 'setup' | 'compare' | 'detail' | 'confirm' | 'editor'
 export interface Photo { src: string; alt: string; caption: string; sourceUrl?: string }
 export interface Place { id: PlaceId; name: string; coordinate: Coordinate; uid: string; sourceId: string; kind: 'building' }
 export interface PublicSource { id: string; label: string; url: string; retrievedAt: string; status: 'ok' | 'cached'; note?: string }

@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { Layers3, MapPin, Scan, X, CloudOff } from 'lucide-react'
 import type { Campus, Coordinate, Mode, Route, Screen } from './types'
-import { routeCoordinates } from './routes'
+import { bottlenecks, lineMidpoint, routeCoordinates } from './routes'
 
 interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
   onSelectRoute: (id: string) => void; onSelectSegment: (id: string) => void
+  pickingEntrance?: boolean; onPickEntrance?: (coordinate: Coordinate) => void
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
 export const colors = { gentle: '#1b7160', direct: '#7164b6', survey: '#1b7160' }
@@ -24,6 +25,7 @@ export default function CampusMap(props: Props) {
   const [showRamps, setShowRamps] = useState(false)
   const [baseError, setBaseError] = useState(false)
   const [campusError, setCampusError] = useState(false)
+  const geometryKey = JSON.stringify(props.routes.map(routeCoordinates))
 
   const refit = () => {
     const map = mapRef.current
@@ -37,6 +39,9 @@ export default function CampusMap(props: Props) {
     if (!rootRef.current) return
     const map = L.map(rootRef.current, { zoomControl: false, minZoom: 15, maxZoom: 20, scrollWheelZoom: true, attributionControl: true }).setView([25.0182, 121.5386], 17)
     mapRef.current = map
+    map.on('click', (event: L.LeafletMouseEvent) => {
+      if (actions.current.pickingEntrance) actions.current.onPickEntrance?.([event.latlng.lng, event.latlng.lat])
+    })
     L.control.zoom({ position: 'bottomright' }).addTo(map)
     map.attributionControl.setPrefix(false)
     const base = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -92,7 +97,7 @@ export default function CampusMap(props: Props) {
       L.polyline(points, { color: '#ffffff', weight: isSelected ? 10 : 8, opacity: focus && !isSelected ? .4 : .9, interactive: false, lineCap: 'round' }).addTo(group)
       const line = L.polyline(points, { color, weight: isSelected ? 5.5 : 4, opacity: focus && !isSelected ? .22 : isSelected ? 1 : .65, dashArray: props.mode === 'survey' ? '6 9' : undefined })
       line.on('click', () => actions.current.onSelectRoute(route.id)).addTo(group)
-      if (isSelected && props.screen === 'detail') {
+      if (isSelected && (props.screen === 'detail' || props.screen === 'editor')) {
         route.segments.forEach(segment => {
           const active = segment.id === props.segmentId
           L.polyline(segment.coordinates.map(latlng), { color: active ? '#e09c37' : color, weight: active ? 8 : 5, opacity: 1 })
@@ -101,6 +106,31 @@ export default function CampusMap(props: Props) {
         })
       }
     })
+    if (selected && ['compare', 'detail', 'confirm'].includes(props.screen)) {
+      const hints = bottlenecks(selected)
+      selected.segments.forEach(segment => {
+        const matches = hints.filter(h => h.segmentIds.includes(segment.id))
+        if (!matches.length) return
+        const label = matches.map(h => `${h.kind === 'slope' ? '最陡路段' : '最窄路段'} ${h.value}${h.kind === 'slope' ? '%' : ' m'}`).join('、')
+        const title = `${segment.name}：${label}${selected.kind === 'demo' ? '（示範）' : ''}，點選查看路段`
+        const icon = L.divIcon({ className: 'bottleneck-marker', html: `<span>${matches.map(h => h.kind === 'slope' ? '坡' : '窄').join(' / ')}</span>`, iconSize: [matches.length > 1 ? 66 : 44, 44], iconAnchor: [matches.length > 1 ? 33 : 22, 22] })
+        const tooltip = document.createElement('span')
+        tooltip.textContent = title
+        const marker = L.marker(latlng(lineMidpoint(segment.coordinates)), { icon, title, keyboard: true, zIndexOffset: 200, bubblingMouseEvents: false }).bindTooltip(tooltip)
+        marker.on('click', () => actions.current.onSelectSegment(segment.id)).addTo(group)
+        const element = marker.getElement()
+        if (element) {
+          element.setAttribute('aria-label', title)
+          L.DomEvent.on(element, 'keydown', event => {
+            const key = (event as KeyboardEvent).key
+            if (key === 'Enter' || key === ' ') {
+              L.DomEvent.stop(event)
+              actions.current.onSelectSegment(segment.id)
+            }
+          })
+        }
+      })
+    }
     if (selected) {
       ;[selected.originEntrance, selected.destinationEntrance].forEach((entrance, i) => {
         const icon = L.divIcon({ className: 'endpoint-marker', html: `<span class="endpoint-dot ${i ? 'destination' : ''}">${i ? 'B' : 'A'}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] })
@@ -132,10 +162,11 @@ export default function CampusMap(props: Props) {
     })
   }, [showRamps, props.campus])
 
-  useEffect(() => { refit() }, [props.routes, props.campus]) // Route direction and viewport are independent of the selected segment.
+  useEffect(() => { refit() }, [geometryKey, props.campus]) // Editing a measurement must not reset the map viewport.
 
   return <section className="map-shell" aria-label="臺大校園路線地圖">
-    <div className="map-canvas" ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />
+    <div className={`map-canvas ${props.pickingEntrance ? 'picking-entrance' : ''}`} ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />
+    {props.pickingEntrance && <div className="map-pick-note" role="status">點選入口位置，座標會填入目前草稿</div>}
     <div className="map-title-pill"><span className="live-dot" /><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖 × 博雅</span></div>
     <div className="map-actions">
       <button className={`map-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖層" aria-expanded={layersOpen} title="地圖圖層"><Layers3 size={20} /></button>
@@ -149,7 +180,7 @@ export default function CampusMap(props: Props) {
     </div>}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
     <div className="map-legend">
-      {props.mode === 'demo' ? <><span><i className="legend-line gentle" />較平緩</span><span><i className="legend-line direct" />距離較短</span></> : <span><MapPin size={15} />公開圖資，路線待查核</span>}
+      {props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />較平緩</span><span><i className="legend-line direct" />距離較短</span></> : <span><MapPin size={15} />已查核動線</span>}
     </div>
     <div className="map-north" aria-hidden="true"><span>↑</span>N</div>
   </section>
