@@ -1,8 +1,23 @@
 # 輪行臺大 WHEELWAY
 
-第 11 組輪椅友善路徑導航系統的 Web App v1.1。依 Proposal-2 與 Project Handout v4 製作，支援「設定條件 → 比較路線 → 檢視路段 → 確認動線」。
+第 11 組輪椅友善路徑導航系統的 Web App 原始碼。依 Proposal-2 與 Project Handout v4 製作，支援「設定條件 → 比較路線 → 檢視路段 → 確認動線」。
 
 公開測試網址：https://ntu-wheelway-11.brainyshell5.chatgpt.site/
+
+## 目前開發狀態
+
+此 repository 包含 v2.0 開發中的程式碼。公開測試站的部署進度獨立管理，不能由 package 版本推定已上線。前端視覺改版尚未完成。
+
+- 可選擇坡度、路寬、階差與查核期限，條件會保留於分享連結。
+- 收藏及偏好保存在目前瀏覽器，可移除收藏並復原。
+- 實勘編輯器增加輸入驗證、保存狀態與多分頁寫入衝突保護。
+- 照片可逐張檢視及放大，確認路線頁提供列印版面。
+- 正式建置產生離線外殼與同版本資料快取，不快取外部地圖圖磚。
+- 提供實勘 JSON 審查及本地資料發布工具，流程見 [實勘發布流程](docs/實勘發布流程.md)。
+
+2026-10-20 已通過 93 項自動測試與 TypeScript 檢查。v2.0 的完整瀏覽器驗證與實際受測者測試仍待完成，既有 `docs/evidence/` 是 v1.1 的驗證紀錄。
+
+公開原始碼不包含實際受測者紀錄、本機 IndexedDB 草稿、使用者照片、API 憑證或課程 PDF。公開已查核路線目前為空，需由團隊實勘及審核後接入。
 
 ## v1.1 新增
 
@@ -25,6 +40,7 @@ npm.cmd run dev
 
 ```powershell
 npm.cmd test
+npm.cmd run typecheck
 npm.cmd run build
 npm.cmd run preview
 ```

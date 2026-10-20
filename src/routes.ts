@@ -1,7 +1,7 @@
 import type { Campus, Coordinate, Entrance, Mode, NavigationState, Preference, Route, RouteMetrics, Segment } from './types'
 
 export const placeNames = { library: '總圖書館', boya: '博雅教學館' }
-export const initialState: NavigationState = { screen: 'setup', mode: 'demo', origin: 'library', wheelchair: 'manual', preference: 'gentle', routeId: 'gentle', segmentId: '' }
+export const initialState: NavigationState = { screen: 'setup', mode: 'demo', origin: 'library', wheelchair: 'manual', preference: 'gentle', routeId: '', segmentId: '' }
 
 export function distance(a: Coordinate, b: Coordinate): number {
   const rad = Math.PI / 180
@@ -139,14 +139,24 @@ export function formatDate(value: string | null): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '日期待確認' : date.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' })
 }
-export function toHash(state: NavigationState): string { return `#${new URLSearchParams({ screen: state.screen, mode: state.mode, from: state.origin, chair: state.wheelchair, prefer: state.preference, route: state.routeId, segment: state.segmentId })}` }
+export function toHash(state: NavigationState): string {
+  const params = new URLSearchParams({ screen: state.screen, mode: state.mode, from: state.origin, chair: state.wheelchair, prefer: state.preference, route: state.routeId, segment: state.segmentId })
+  if (state.limits) for (const [key, n] of Object.entries(state.limits)) if (n !== null) params.set(key, String(n))
+  return `#${params}`
+}
 export function fromHash(hash: string): NavigationState {
   const p = new URLSearchParams(hash.replace(/^#/, ''))
   const screen = p.get('screen')
-  return { screen: ['setup', 'compare', 'detail', 'confirm', 'editor'].includes(screen ?? '') ? screen as NavigationState['screen'] : 'setup',
+  const limits = { maxSlope: null as number | null, minWidth: null as number | null, maxStep: null as number | null, recheckDays: null as number | null }
+  for (const key of Object.keys(limits) as (keyof typeof limits)[]) {
+    const raw = p.get(key), n = Number(raw)
+    if (raw !== null && raw.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= (key === 'recheckDays' ? 3650 : 1000) && (key !== 'recheckDays' || Number.isInteger(n))) limits[key] = n
+  }
+  return { screen: ['setup', 'compare', 'detail', 'confirm', 'editor', 'saved', 'help'].includes(screen ?? '') ? screen as NavigationState['screen'] : 'setup',
     mode: p.get('mode') === 'survey' ? 'survey' : 'demo', origin: p.get('from') === 'boya' ? 'boya' : 'library',
     wheelchair: p.get('chair') === 'electric' ? 'electric' : 'manual', preference: p.get('prefer') === 'short' ? 'short' : 'gentle',
-    routeId: p.get('route') ?? 'gentle', segmentId: p.get('segment') ?? '' }
+    routeId: (p.get('route') ?? '').slice(0, 120), segmentId: (p.get('segment') ?? '').slice(0, 120),
+    ...(Object.values(limits).some(v => v !== null) ? { limits } : {}) }
 }
 
 export function isCampus(value: unknown): value is Campus {

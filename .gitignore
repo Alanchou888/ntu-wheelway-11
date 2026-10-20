@@ -9,3 +9,7 @@ output/
 *.tsbuildinfo
 .sites-runtime/
 .env*
+private/
+*.pem
+*.key
+*.pfx

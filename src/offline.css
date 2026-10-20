@@ -1,0 +1,22 @@
+.offline-status{position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:6px 18px;padding:6px 28px;border-bottom:1px solid #dce5d8;background:#f0f5eb;color:#345242;z-index:24;min-height:58px;font-size:11px;line-height:1.7}
+.offline-status.is-offline{background:#fff3db;border-color:#e6d3aa;color:#73501d}
+.offline-status-message{display:flex;align-items:center;gap:9px;flex:1;min-width:220px}
+.offline-status-message>svg{flex-shrink:0}
+.offline-status-message strong{display:block;font-size:12px;font-weight:600}
+.offline-status-message span{display:block;color:#52664b;font-size:10px}
+.offline-status.is-offline .offline-status-message span{color:#70552b}
+.offline-status-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.offline-action{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 12px;border:1px solid #c9d7c0;border-radius:7px;background:#fff;color:#155b50;font-size:11px;font-weight:600}
+.offline-action:hover{background:#e7efdf}
+.offline-action.offline-update{background:#155b50;border-color:#155b50;color:white}
+.offline-action.offline-update:hover{background:#10483f}
+.offline-action:disabled{background:#e7eae3;border-color:#cbd3c4;color:#5b6656;cursor:default}
+.offline-help{position:static}
+.offline-help summary{min-height:44px;display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:6px;cursor:pointer;font-size:11px;text-decoration:underline;text-underline-offset:3px}
+.offline-help summary::-webkit-details-marker{display:none}
+.offline-help summary:before{content:'＋';font-size:15px;text-decoration:none}
+.offline-help[open] summary:before{content:'−'}
+.offline-help-content{position:absolute;right:20px;top:calc(100% - 2px);width:min(460px,calc(100vw - 28px));max-height:65dvh;overflow-y:auto;overscroll-behavior:contain;background:#fff;padding:18px;border:1px solid #cfdbca;border-radius:0 0 9px 9px;box-shadow:0 6px 24px #23412a24;color:#40573c;z-index:800;font-size:12px;line-height:1.9}
+.offline-help-content p+p{margin-top:12px}
+.offline-notice{flex-basis:100%;color:#73501d;font-size:11px;padding-bottom:5px}
+@media(max-width:760px){.offline-status{padding:7px 15px;gap:2px 10px}.offline-status-message{min-width:0;flex-basis:100%;padding:3px 0}.offline-status-message span{font-size:11px}.offline-status-actions{margin-left:24px;gap:3px}.offline-help-content{right:14px}.offline-action,.offline-help summary{font-size:11px}.offline-notice{margin-left:24px}}

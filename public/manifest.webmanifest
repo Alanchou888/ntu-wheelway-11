@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "輪行臺大 Wheelway",
+  "short_name": "輪行臺大",
+  "description": "比較臺大總圖與博雅周邊動線，查看路段資料與實勘草稿。可由支援的瀏覽器加入主畫面，離線查看已保存的本站快照與清單。",
+  "lang": "zh-Hant-TW",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f9f6",
+  "theme_color": "#155b50",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

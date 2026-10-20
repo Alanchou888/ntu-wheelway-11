@@ -3,6 +3,18 @@ import { buildDemoRoutes, distance, isEligible, lineDistance, placeNames, validS
 
 export const MAX_IMPORT_BYTES = 20_000_000
 export const MAX_PHOTO_BYTES = 2_000_000
+export const MAX_MEASUREMENT = 100_000
+export function measurementInput(text: string, positive = false): number | null {
+  if (!text.trim()) return null
+  const value = Number(text)
+  if (!Number.isFinite(value) || value < 0 || value > MAX_MEASUREMENT || (positive && value === 0)) throw new Error(positive ? '請填寫大於 0 且不超過 100000 的數值' : '請填寫 0 至 100000 的數值')
+  return value
+}
+export function obstacleInput(text: string): string[] {
+  const lines = text ? text.split('\n') : []
+  if (lines.length > 30 || lines.some(line => line.length > 500)) throw new Error('最多 30 項障礙，每項上限 500 字。請縮短後再填寫，原有內容已保留。')
+  return lines
+}
 export type SurveyItem = Entrance | Segment
 export const isSegment = (item: SurveyItem): item is Segment => 'coordinates' in item
 export const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
@@ -33,7 +45,7 @@ export function verificationIssues(item: SurveyItem): string[] {
   if (isSegment(item)) {
     for (const [key, label] of [['maxSlopePercent', '最大坡度'], ['minWidthM', '有效路寬'], ['stepHeightCm', '最大階差'], ['rampLengthM', '坡道長度']] as const) {
       const n = item[key]
-      if (n === null || !Number.isFinite(n) || n < 0 || (key === 'minWidthM' && n <= 0)) issues.push(label)
+      if (n === null || !Number.isFinite(n) || n < 0 || n > MAX_MEASUREMENT || (key === 'minWidthM' && n <= 0)) issues.push(label)
     }
     if (!item.surface?.trim()) issues.push('路面條件')
     if (item.hasStairs === null) issues.push('階梯狀況')
@@ -70,7 +82,7 @@ function coordinate(value: unknown, path: string) {
   if (!Array.isArray(value) || value.length !== 2 || !value.every(v => typeof v === 'number' && Number.isFinite(v)) || Math.abs(value[0]) > 180 || Math.abs(value[1]) > 90) throw new Error(`${path} 須為有效的 [經度, 緯度]`)
 }
 function nullableNumber(value: unknown, path: string) {
-  if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100_000)) throw new Error(`${path} 須為非負數或 null`)
+  if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_MEASUREMENT)) throw new Error(`${path} 須為 0 至 ${MAX_MEASUREMENT} 的數值或 null`)
 }
 function date(value: unknown, path: string) {
   if (value !== null && (typeof value !== 'string' || value.length > 40 || !Number.isFinite(Date.parse(value)))) throw new Error(`${path} 日期格式不正確`)
@@ -142,7 +154,8 @@ export function parseSurveyData(value: unknown): SurveyData {
       if (s.sourceUrl !== undefined) { string(s.sourceUrl, '來源網址'); if (s.sourceUrl && !/^https:\/\//i.test(s.sourceUrl)) throw new Error('來源網址須使用 HTTPS') }
     })
   })
-  return structuredClone(value) as SurveyData
+  // Browser storage metadata is deliberately kept out of team JSON exports.
+  return { version: 1, routes: structuredClone(data.routes) as Route[] }
 }
 
 const csvCell = (v: unknown) => {
@@ -169,24 +182,70 @@ export function downloadFile(filename: string, contents: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export function readLocalSurvey(): Promise<SurveyData | null> { return database('read') as Promise<SurveyData | null> }
-export function writeLocalSurvey(data: SurveyData): Promise<void> { return database('write', data) as Promise<void> }
-function database(action: 'read' | 'write', data?: SurveyData): Promise<SurveyData | null | void> {
+export interface StoredSurvey { data: SurveyData | null; revision: number | null; savedAt: string | null }
+export class SurveyConflictError extends Error {
+  constructor(public readonly latest: StoredSurvey) { super('另一個分頁已儲存較新草稿。此頁內容已保留，請先下載目前版本，再載入較新草稿。'); this.name = 'SurveyConflictError' }
+}
+export class SurveyReadError extends Error {
+  constructor(message: string, public readonly raw: unknown, public readonly revision: number | null) { super(message); this.name = 'SurveyReadError' }
+}
+function storedRevision(raw: unknown): number | null {
+  if (raw === undefined) return null
+  const metadata = raw && typeof raw === 'object' ? (raw as { _storage?: { revision?: unknown } })._storage : undefined
+  if (metadata === undefined) return 0 // Existing v1 drafts are upgraded on the first intentional save.
+  if (!metadata || !Number.isSafeInteger(metadata.revision) || (metadata.revision as number) < 1) throw new Error('本機草稿版本資訊損壞，請先下載備份')
+  return metadata.revision as number
+}
+function storedSurvey(raw: unknown): StoredSurvey {
+  let revision: number | null = null
+  try {
+    revision = storedRevision(raw)
+    if (raw === undefined) return { data: null, revision, savedAt: null }
+    const savedAt = (raw as { _storage?: { savedAt?: unknown } })?._storage?.savedAt
+    return { data: parseSurveyData(raw), revision, savedAt: typeof savedAt === 'string' ? savedAt : null }
+  } catch (e) { throw new SurveyReadError(e instanceof Error ? e.message : '無法讀取草稿', raw, revision) }
+}
+export async function readLocalSurvey(): Promise<SurveyData | null> { return (await readLocalSurveyRecord()).data }
+export function readLocalSurveyRecord(): Promise<StoredSurvey> { return database('read') }
+export async function writeLocalSurvey(data: SurveyData, expectedRevision: number | null): Promise<StoredSurvey> {
+  const parsed = parseSurveyData(data)
+  if (new Blob([JSON.stringify(parsed)]).size > MAX_IMPORT_BYTES) return Promise.reject(new Error('完整草稿超過 20 MB，請縮小照片後再儲存'))
+  return database('write', parsed, expectedRevision)
+}
+function database(action: 'read' | 'write', data?: SurveyData, expectedRevision?: number | null): Promise<StoredSurvey> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('wheelway-field-survey', 1)
-    request.onupgradeneeded = () => request.result.createObjectStore('drafts')
+    let settled = false
+    request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('drafts')) request.result.createObjectStore('drafts') }
     request.onerror = () => reject(new Error('無法開啟本機儲存空間'))
-    request.onblocked = () => reject(new Error('本機資料庫被其他分頁占用'))
+    request.onblocked = () => { settled = true; reject(new Error('本機資料庫被其他分頁占用，請關閉其他編輯分頁後重試')) }
     request.onsuccess = () => {
       const db = request.result
-      const tx = db.transaction('drafts', action === 'read' ? 'readonly' : 'readwrite')
-      const store = tx.objectStore('drafts')
-      const op = action === 'read' ? store.get('current-v1') : store.put(data, 'current-v1')
-      let result: SurveyData | null = null
-      op.onsuccess = () => { if (action === 'read' && op.result) { try { result = parseSurveyData(op.result) } catch (e) { reject(e) } } }
-      tx.oncomplete = () => { db.close(); resolve(action === 'read' ? result : undefined) }
-      tx.onerror = () => { db.close(); reject(new Error('本機儲存失敗，請匯出 JSON 備份')) }
-      tx.onabort = () => { db.close(); reject(new Error('本機儲存未完成，請匯出 JSON 備份')) }
+      if (settled) { db.close(); return }
+      db.onversionchange = () => db.close()
+      let tx: IDBTransaction
+      try { tx = db.transaction('drafts', action === 'read' ? 'readonly' : 'readwrite') }
+      catch { db.close(); reject(new Error('本機資料庫格式不符，請先保留備份並檢查網站儲存空間')); return }
+      const store = tx.objectStore('drafts'), op = store.get('current-v1')
+      let result: StoredSurvey = { data: null, revision: null, savedAt: null }
+      let failure: unknown = null
+      op.onsuccess = () => {
+        try {
+          if (action === 'read') result = storedSurvey(op.result)
+          else {
+            const actualRevision = storedRevision(op.result)
+            if (actualRevision !== expectedRevision) throw new SurveyConflictError(storedSurvey(op.result))
+            const revision = (actualRevision ?? 0) + 1, savedAt = new Date().toISOString()
+            // Read, compare and put share one transaction, preventing a stale tab
+            // from overwriting a newer draft between the comparison and the put.
+            store.put({ ...data, _storage: { revision, savedAt } }, 'current-v1')
+            result = { data: data!, revision, savedAt }
+          }
+        } catch (e) { failure = e; tx.abort() }
+      }
+      tx.oncomplete = () => { db.close(); resolve(result) }
+      tx.onerror = () => { db.close(); reject(failure ?? new Error('本機儲存失敗，請匯出 JSON 備份')) }
+      tx.onabort = () => { db.close(); reject(failure ?? new Error('本機儲存未完成，請匯出 JSON 備份')) }
     }
   })
 }

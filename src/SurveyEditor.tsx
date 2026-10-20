@@ -1,18 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowLeft, CheckCircle2, ClipboardCheck, Download, ImagePlus, MapPin, Save, TriangleAlert, Upload, X } from 'lucide-react'
 import CampusMap from './CampusMap'
 import type { Campus, Coordinate, Entrance, Photo, Route, Segment, SurveyData } from './types'
 import { formatDate, isEligible, segmentLabel } from './routes'
-import { createSurveyDrafts, downloadFile, isSegment, MAX_IMPORT_BYTES, parseSurveyData, photoFromFile, readLocalSurvey, routeGeometryIssues, surveyCsv, surveyProgress, today, verificationIssues, writeLocalSurvey } from './survey'
+import { createSurveyDrafts, downloadFile, isSegment, MAX_IMPORT_BYTES, measurementInput, obstacleInput, parseSurveyData, photoFromFile, routeGeometryIssues, surveyCsv, surveyProgress, SurveyConflictError, SurveyReadError, today, verificationIssues } from './survey'
 import type { SurveyItem } from './survey'
+import { SurveyDraftSession } from './survey-storage'
 import './survey-editor.css'
 
 type Target = 'origin' | 'destination' | string
 type Patch = Partial<Entrance & Segment>
-type SaveState = 'loading' | 'pending' | 'saved' | 'failed'
+type SaveState = 'loading' | 'pending' | 'saved' | 'failed' | 'conflict'
 
 function NumberField({ label, value, onChange, positive = false }: { label: string; value: number | null; onChange: (n: number | null) => void; positive?: boolean }) {
-  return <label className="survey-field"><span>{label}</span><input type="number" min={positive ? '0.01' : '0'} max="100000" step="any" inputMode="decimal" placeholder="未量測" value={value ?? ''} onChange={e => onChange(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)} /></label>
+  const [text, setText] = useState(value === null ? '' : String(value))
+  const [error, setError] = useState('')
+  const focused = useRef(false)
+  const hintId = useId()
+  useEffect(() => { if (!focused.current) setText(value === null ? '' : String(value)) }, [value])
+  return <label className="survey-field"><span>{label}</span><input type="number" min="0" max="100000" step="any" inputMode="decimal" placeholder="未量測" value={text} aria-label={label} aria-invalid={!!error} aria-describedby={error ? hintId : undefined} onFocus={() => { focused.current = true }} onChange={e => {
+    setText(e.target.value)
+    try {
+      if (e.target.validity.badInput) throw new Error('數字尚未填完整')
+      const next = measurementInput(e.target.value, positive)
+      setError(''); onChange(next)
+    } catch (e) { setError(`${e instanceof Error ? e.message : '數值無效'}。已保留原有量測，離開欄位會還原。`) }
+  }} onBlur={() => { focused.current = false; setText(value === null ? '' : String(value)) }} />{error && <small id={hintId} role="status">{error}</small>}</label>
 }
 function BooleanField({ label, value, onChange, yes, no }: { label: string; value: boolean | null; onChange: (v: boolean | null) => void; yes: string; no: string }) {
   return <label className="survey-field"><span>{label}</span><select value={value === null ? '' : String(value)} onChange={e => onChange(e.target.value === '' ? null : e.target.value === 'true')}><option value="">尚未確認</option><option value="false">{no}</option><option value="true">{yes}</option></select></label>
@@ -67,7 +80,7 @@ function ItemForm({ item, onPatch, onError, onPick, picking, onSync, geometryPro
     {isSegment(item) ? <>
       <div className="survey-grid"><NumberField label="最大坡度（%）" value={item.maxSlopePercent} onChange={v => patch({ maxSlopePercent: v })} /><NumberField label="有效路寬（m）" value={item.minWidthM} positive onChange={v => patch({ minWidthM: v })} /><NumberField label="最大階差（cm）" value={item.stepHeightCm} onChange={v => patch({ stepHeightCm: v })} /><NumberField label="坡道長度（m）" value={item.rampLengthM} onChange={v => patch({ rampLengthM: v })} /><BooleanField label="階梯狀況" value={item.hasStairs} yes="有階梯" no="已確認無階梯" onChange={v => patch({ hasStairs: v })} /><BooleanField label="封閉狀況" value={item.closed} yes="已封閉" no="已確認未封閉" onChange={v => patch({ closed: v })} /></div>
       <label className="survey-field"><span>路面條件</span><input maxLength={500} placeholder="例如：瀝青，局部破損" value={item.surface ?? ''} onChange={e => patch({ surface: e.target.value || null })} /></label>
-      <label className="survey-field"><span>已知障礙，一行一項</span><textarea maxLength={5000} rows={3} value={item.obstacles.join('\n')} placeholder="查核後未發現固定障礙可留白" onChange={e => patch({ obstacles: e.target.value ? e.target.value.split('\n').slice(0, 30) : [] })} /></label>
+      <label className="survey-field"><span>已知障礙，一行一項，每項最多 500 字</span><textarea maxLength={5000} rows={3} value={item.obstacles.join('\n')} placeholder="查核後未發現固定障礙可留白" onChange={e => { try { patch({ obstacles: obstacleInput(e.target.value) }) } catch (error) { onError(error instanceof Error ? error.message : '障礙描述過長，已保留原有內容') } }} /></label>
       <p className="survey-help">幾何參考公開道路。請現場確認路段銜接，取得日期 {formatDate(item.retrievedAt)}。</p>
     </> : <div className="entrance-location-editor"><p>入口座標：{item.coordinate[0].toFixed(7)}, {item.coordinate[1].toFixed(7)}</p><CoordinateFields coordinate={item.coordinate} onChange={coordinate => patch({ coordinate })} onError={onError} /><button className={`button secondary wide ${picking ? 'picking' : ''}`} aria-pressed={picking} onClick={onPick}><MapPin size={17} />{picking ? '點選地圖設定入口，或按此取消' : '在地圖上設定入口位置'}</button>{geometryProblem && <button className="button secondary wide" onClick={onSync}>將相鄰路段端點移至此入口</button>}<p className="survey-help">可輸入座標或點選地圖記錄入口，請依現場照片核對。變更入口不會自動移動路段端點。</p></div>}
     <div className="survey-grid"><label className="survey-field"><span>實勘日期</span><input type="date" max={today()} value={item.verifiedAt?.slice(0, 10) ?? ''} onChange={e => patch({ verifiedAt: e.target.value || null })} /></label></div>
@@ -92,45 +105,95 @@ export default function SurveyEditor({ campus, onClose }: { campus: Campus; onCl
   const [picking, setPicking] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [savedAt, setSavedAt] = useState<string | null>(null)
+  const [hasConflict, setHasConflict] = useState(false)
+  const [recoveryRaw, setRecoveryRaw] = useState<unknown>(undefined)
+  const [loadingNewer, setLoadingNewer] = useState(false)
+  const [confirmReload, setConfirmReload] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const latest = useRef(data)
-  const readyRef = useRef(false)
   const autoSaveEnabled = useRef(true)
-  const saveSequence = useRef(0)
+  const sessionRef = useRef<SurveyDraftSession | null>(null)
+  if (!sessionRef.current) sessionRef.current = new SurveyDraftSession(data)
+  const session = sessionRef.current
+  const persistRef = useRef<() => Promise<void>>(async () => {})
+  const mounted = useRef(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const route = data.routes.find(r => r.id === routeId) ?? data.routes[0]
   const item = route ? target === 'origin' ? route.originEntrance : target === 'destination' ? route.destinationEntrance : route.segments.find(s => s.id === target) ?? route.segments[0] : null
   const geometryIssues = route ? routeGeometryIssues(route) : []
   const progress = route ? surveyProgress(route) : null
   latest.current = data
-  readyRef.current = ready
+  const updateUnsavedSignal = () => { if (mounted.current) document.documentElement.dataset.surveyUnsaved = String(session.dirty) }
+  const replaceDraft = (draft: SurveyData) => {
+    latest.current = draft
+    session.change(draft)
+    setData(draft)
+    if (autoSaveEnabled.current && !session.conflict) setSaveState('pending')
+    updateUnsavedSignal()
+  }
 
   useEffect(() => {
     let cancelled = false
-    readLocalSurvey().then(stored => { if (!cancelled && stored) setData(stored) }).catch(e => { if (!cancelled) { autoSaveEnabled.current = false; setSaveState('failed'); setError(`${e.message || '無法載入本機草稿'}。已暫停自動儲存，請匯入備份或手動儲存新草稿。`) } }).finally(() => { if (!cancelled) { setReady(true); headingRef.current?.focus() } })
+    session.load().then(() => { if (!cancelled) { latest.current = session.data; setData(session.data); setSavedAt(session.savedAt); setSaveState('saved') } }).catch(e => {
+      if (!cancelled) {
+        autoSaveEnabled.current = false
+        if (e instanceof SurveyReadError) setRecoveryRaw(e.raw)
+        setSaveState('failed'); setError(`${e.message || '無法載入本機草稿'}。已暫停自動儲存，請下載原有草稿備份，再匯入備份或手動儲存新草稿。`)
+      }
+    }).finally(() => { if (!cancelled) { setReady(true); updateUnsavedSignal(); headingRef.current?.focus() } })
     return () => { cancelled = true }
   }, [])
-  const persist = async (draft: SurveyData) => {
+  const persist = async (manual = false) => {
+    if (!autoSaveEnabled.current && !manual) throw new Error('自動儲存已暫停。請先匯出備份，再手動儲存或載入較新草稿。')
     autoSaveEnabled.current = true
-    const sequence = ++saveSequence.current
     setSaveState('pending')
-    try { await writeLocalSurvey(draft); if (sequence === saveSequence.current) { setSaveState('saved'); setError(previous => previous.startsWith('本機儲存失敗') || previous.includes('已暫停自動儲存') ? '' : previous) } }
-    catch { if (sequence === saveSequence.current) { setSaveState('failed'); setError('本機儲存失敗，草稿仍在目前畫面，請匯出 JSON 備份。') } }
+    try {
+      await session.flush()
+      setSaveState('saved'); setSavedAt(session.savedAt)
+      setError(previous => previous.startsWith('本機儲存失敗') || previous.includes('已暫停自動儲存') ? '' : previous)
+    } catch (e) {
+      if (e instanceof SurveyConflictError) { autoSaveEnabled.current = false; setHasConflict(true); setSaveState('conflict'); setError(e.message) }
+      else { setSaveState('failed'); setError(`本機儲存失敗，草稿仍在目前畫面，請匯出 JSON 備份。${e instanceof Error ? e.message : ''}`) }
+      throw e
+    } finally { updateUnsavedSignal() }
   }
+  persistRef.current = persist
   useEffect(() => {
-    if (!ready || !autoSaveEnabled.current) return
+    if (!ready || !autoSaveEnabled.current || !session.dirty || session.conflict) return
     setSaveState('pending')
-    const timer = setTimeout(() => void persist(data), 600)
+    const timer = setTimeout(() => { void persistRef.current().catch(() => {}) }, 600)
     return () => clearTimeout(timer)
   }, [data, ready])
-  useEffect(() => () => { if (readyRef.current && autoSaveEnabled.current) void writeLocalSurvey(latest.current).catch(() => {}) }, [])
+  useEffect(() => {
+    mounted.current = true
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (session.dirty) { event.preventDefault(); event.returnValue = '' } }
+    const backgroundSave = () => { if (session.dirty && autoSaveEnabled.current && !session.conflict) void persistRef.current().catch(() => {}) }
+    const visibility = () => { if (document.visibilityState === 'hidden') backgroundSave() }
+    const requestedFlush = (event: Event) => {
+      const detail = (event as CustomEvent<{ waitUntil: (work: Promise<void>) => void }>).detail
+      if (typeof detail?.waitUntil === 'function') detail.waitUntil(session.dirty ? persistRef.current() : Promise.resolve())
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    window.addEventListener('pagehide', backgroundSave)
+    document.addEventListener('visibilitychange', visibility)
+    window.addEventListener('wheelway:survey-flush', requestedFlush)
+    return () => {
+      mounted.current = false
+      window.removeEventListener('beforeunload', beforeUnload)
+      window.removeEventListener('pagehide', backgroundSave)
+      document.removeEventListener('visibilitychange', visibility)
+      window.removeEventListener('wheelway:survey-flush', requestedFlush)
+      delete document.documentElement.dataset.surveyUnsaved
+    }
+  }, [])
   useEffect(() => {
     if (picking && window.innerWidth <= 760) document.querySelector('.editor-workspace .map-shell')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [picking])
 
   const updateRoute = (transform: (r: Route) => Route) => {
     setMessage('')
-    setData(current => ({ ...current, routes: current.routes.map(r => r.id === route?.id ? transform(r) : r) }))
+    replaceDraft({ ...latest.current, routes: latest.current.routes.map(r => r.id === route?.id ? transform(r) : r) })
   }
   const patchItem = (patch: Patch) => {
     const transform = (r: Route): Route => target === 'origin' ? { ...r, originEntrance: { ...r.originEntrance, ...patch } } : target === 'destination' ? { ...r, destinationEntrance: { ...r.destinationEntrance, ...patch } } : { ...r, segments: r.segments.map(s => s.id === item?.id ? { ...s, ...patch } : s) }
@@ -153,33 +216,48 @@ export default function SurveyEditor({ campus, onClose }: { campus: Campus; onCl
       if (file.size > MAX_IMPORT_BYTES) throw new Error('JSON 上限 20 MB，請減少照片大小')
       const parsed = parseSurveyData(JSON.parse((await file.text()).replace(/^\ufeff/, '')))
       autoSaveEnabled.current = true
-      setData(parsed); setTarget('origin'); setRouteId(''); setPicking(false); setRevision(v => v + 1)
+      replaceDraft(parsed); setTarget('origin'); setRouteId(''); setPicking(false); setRevision(v => v + 1)
       setError(''); setMessage(`已匯入 ${parsed.routes.length} 條實勘草稿，原有狀態保留，仍需團隊審核。`)
     } catch (e) { setError(`匯入失敗，保留目前草稿。${e instanceof Error ? e.message : '請檢查檔案'}`) }
     finally { if (inputRef.current) inputRef.current.value = '' }
   }
   const exportData = (csv = false) => {
     try {
-      const parsed = parseSurveyData(data)
-      const json = JSON.stringify(parsed, null, 2)
+      const parsed = parseSurveyData(latest.current)
+      // Compact JSON stays within the same byte limit used for import/storage.
+      const json = JSON.stringify(parsed)
       if (new Blob([json]).size > MAX_IMPORT_BYTES) throw new Error('完整資料超過 20 MB，請縮小或移除部分照片後匯出')
       downloadFile(`wheelway-survey-${today()}.${csv ? 'csv' : 'json'}`, csv ? surveyCsv(parsed) : json, csv ? 'text/csv;charset=utf-8' : 'application/json')
       setError(''); setMessage(csv ? '已匯出 CSV 彙整，照片請以 JSON 備份。' : '已匯出含照片的 JSON。審核後再由團隊更新公開網站。')
     } catch (e) { setError(e instanceof Error ? e.message : '匯出失敗') }
   }
+  const reloadNewer = async () => {
+    setLoadingNewer(true)
+    try {
+      await session.load()
+      latest.current = session.data; setData(session.data)
+      autoSaveEnabled.current = true; setHasConflict(false); setConfirmReload(false); setSaveState('saved'); setSavedAt(session.savedAt)
+      setTarget('origin'); setRouteId(''); setPicking(false); setRevision(v => v + 1)
+      setError(''); setMessage('已載入此瀏覽器儲存的較新草稿。'); updateUnsavedSignal()
+    } catch (e) { setError(`載入失敗，目前畫面已保留。${e instanceof Error ? e.message : ''}`) }
+    finally { setLoadingNewer(false) }
+  }
+  const leaveEditor = async () => { try { if (session.dirty) await persist(); onClose() } catch { /* Keep the current editor open so the draft can be exported. */ } }
 
   return <main className="workspace editor-workspace">
     <aside className="content-panel survey-panel" id="content-panel" tabIndex={-1} aria-label="實勘草稿編輯器">
       <div className="panel-main">
-        <button className="back-link" onClick={onClose}><ArrowLeft size={17} />返回選路</button><p className="panel-eyebrow">FIELD SURVEY</p><h1 tabIndex={-1} ref={headingRef}>實勘資料編輯器</h1>
+        <button className="back-link" onClick={() => void leaveEditor()}><ArrowLeft size={17} />返回選路</button><p className="panel-eyebrow">FIELD SURVEY</p><h1 tabIndex={-1} ref={headingRef}>實勘資料編輯器</h1>
         <p className="survey-intro">逐段記錄現場，填入自己的量測與照片。</p>
         <div className="survey-local-note"><Save size={18} /><p>草稿僅存在目前瀏覽器，連結不包含草稿。請匯出 JSON 備份，交由團隊審核與發布。</p></div>
         {!ready ? <p role="status">載入本機草稿中…</p> : <>
-          <div className="survey-toolbar"><button className="button secondary" onClick={() => inputRef.current?.click()}><Upload size={16} />匯入 JSON</button><button className="button primary" onClick={() => exportData()}><Download size={16} />匯出 JSON</button><button className="button secondary" onClick={() => exportData(true)}><Download size={16} />匯出 CSV</button><button className="button secondary" onClick={() => void persist(data)}><Save size={16} />儲存草稿</button></div>
+          <div className="survey-toolbar"><button className="button secondary" onClick={() => inputRef.current?.click()}><Upload size={16} />匯入 JSON</button><button className="button primary" onClick={() => exportData()}><Download size={16} />匯出 JSON</button><button className="button secondary" onClick={() => exportData(true)}><Download size={16} />匯出 CSV</button><button className="button secondary" disabled={hasConflict} onClick={() => { void persist(true).catch(() => {}) }}><Save size={16} />儲存草稿</button></div>
           <p className="survey-help">匯入會取代目前草稿，請先匯出備份。JSON 保留照片與完整資料，CSV 供表格檢閱。</p>
           <input ref={inputRef} type="file" accept="application/json,.json" hidden onChange={e => void importJson(e.target.files?.[0])} />
-          <p className={`survey-save-status ${saveState}`} role="status">{saveState === 'saved' ? '已儲存在此瀏覽器' : saveState === 'failed' ? '尚未儲存，請匯出備份' : '正在儲存草稿…'}</p>
+          <p className={`survey-save-status ${saveState}`} role="status">{saveState === 'saved' ? '已儲存在此瀏覽器' : saveState === 'conflict' ? '發現較新草稿，已暫停儲存' : saveState === 'failed' ? '尚未儲存，請匯出備份' : '正在儲存草稿…'}</p>{savedAt && <p className="survey-help">最近儲存：{new Date(savedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>}
           {message && <p className="survey-message" role="status"><CheckCircle2 size={17} />{message}</p>}{error && <p className="survey-error" role="alert"><TriangleAlert size={17} />{error}</p>}
+          {recoveryRaw !== undefined && <button className="button secondary wide" onClick={() => downloadFile(`wheelway-recovery-${today()}.json`, JSON.stringify(recoveryRaw), 'application/json')}><Download size={17} />下載原有草稿備份</button>}
+          {hasConflict && <section className="verification-box" aria-label="草稿版本衝突"><h2>保留兩個分頁的紀錄</h2><p>先匯出此頁 JSON 備份，再載入較新草稿。需要合併時，可比較兩份檔案後匯入。</p><button className="button secondary wide" onClick={() => exportData()}><Download size={17} />下載此頁版本</button>{confirmReload ? <><p>載入會取代此頁未儲存內容，請確認已下載備份。</p><button className="button primary wide" disabled={loadingNewer} onClick={() => void reloadNewer()}>{loadingNewer ? '載入中…' : '確認載入較新草稿'}</button><button className="button plain wide" onClick={() => setConfirmReload(false)}>取消</button></> : <button className="button secondary wide" onClick={() => setConfirmReload(true)}>載入較新草稿</button>}</section>}
           {route && progress ? <>
             <label className="survey-field"><span>選擇實勘動線</span><select value={route.id} onChange={e => { setRouteId(e.target.value); selectItem('origin') }}>{data.routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
             <label className="survey-field"><span>動線名稱</span><input maxLength={200} value={route.name} onChange={e => updateRoute(r => ({ ...r, name: e.target.value }))} /></label>
@@ -191,7 +269,7 @@ export default function SurveyEditor({ campus, onClose }: { campus: Campus; onCl
             ].map(entry => <button key={entry.id} aria-pressed={item?.id === entry.item.id} onClick={() => selectItem(entry.id)}><span>{entry.label}</span><strong>{entry.item.name}</strong><small>{segmentLabel(entry.item as Segment)}</small></button>)}</div>
             {item && <ItemForm key={`${route.id}-${item.id}-${revision}`} item={item} onPatch={patchItem} onError={setError} onPick={() => setPicking(v => !v)} picking={picking} onSync={syncEndpoint} geometryProblem={geometryIssues.length > 0} />}
           </> : <p className="survey-intro">檔案內沒有路線，可從下方建立空白草稿。</p>}
-          <div className="survey-reset">{resetting ? <><p>重建會取代此瀏覽器內的草稿。請先匯出需要保留的紀錄。</p><button className="button secondary" onClick={() => { autoSaveEnabled.current = true; setData(createSurveyDrafts(campus)); selectItem('origin'); setRouteId(''); setResetting(false); setRevision(v => v + 1); setMessage('已建立空白草稿，所有通行條件與證據均待填寫。'); setError('') }}>確認重建空白草稿</button><button className="button plain" onClick={() => setResetting(false)}>取消</button></> : <button className="button plain wide" onClick={() => setResetting(true)}>從公開幾何重建空白草稿</button>}</div>
+          <div className="survey-reset">{resetting ? <><p>重建會取代此瀏覽器內的草稿。請先匯出需要保留的紀錄。</p><button className="button secondary" onClick={() => { autoSaveEnabled.current = true; replaceDraft(createSurveyDrafts(campus)); selectItem('origin'); setRouteId(''); setResetting(false); setRevision(v => v + 1); setMessage('已建立空白草稿，所有通行條件與證據均待填寫。'); setError('') }}>確認重建空白草稿</button><button className="button plain" onClick={() => setResetting(false)}>取消</button></> : <button className="button plain wide" onClick={() => setResetting(true)}>從公開幾何重建空白草稿</button>}</div>
         </>}
       </div>
     </aside>

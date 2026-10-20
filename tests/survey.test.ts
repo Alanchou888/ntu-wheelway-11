@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { Campus, Route, SurveyData } from '../src/types'
 import { bottlenecks, buildDemoRoutes, comparisonDifference, fromHash, isEligible, lineDistance, lineMidpoint, metrics, reverseRoute } from '../src/routes'
-import { createSurveyDrafts, parseSurveyData, routeGeometryIssues, safePhotoSrc, surveyCsv, surveyProgress, verificationIssues } from '../src/survey'
+import { createSurveyDrafts, measurementInput, obstacleInput, parseSurveyData, routeGeometryIssues, safePhotoSrc, surveyCsv, surveyProgress, verificationIssues } from '../src/survey'
 
 const campus = JSON.parse(readFileSync(new URL('../public/data/campus.json', import.meta.url), 'utf8')) as Campus
 const demos = buildDemoRoutes(campus)
@@ -13,6 +13,18 @@ const surveyed = (): Route => {
   return route
 }
 describe('field drafts and verification', () => {
+  it('accepts unfinished blank measurements while rejecting values that would break saved drafts', () => {
+    expect(measurementInput('')).toBeNull()
+    expect(measurementInput('0')).toBe(0)
+    expect(measurementInput('0.001', true)).toBe(0.001)
+    expect(measurementInput('100000')).toBe(100000)
+    for (const value of ['-1', '100001', 'Infinity', 'NaN', '1e']) expect(() => measurementInput(value)).toThrow()
+    expect(() => measurementInput('0', true)).toThrow()
+    expect(obstacleInput('')).toEqual([])
+    expect(obstacleInput('已量測的障礙\n第二項')).toHaveLength(2)
+    expect(() => obstacleInput('x'.repeat(501))).toThrow(/500/)
+    expect(() => obstacleInput(Array(31).fill('item').join('\n'))).toThrow(/30/)
+  })
   it('reuses only road geometry and discards every simulated measurement and photo', () => {
     const draft = createSurveyDrafts(campus)
     expect(draft.routes).toHaveLength(2)
