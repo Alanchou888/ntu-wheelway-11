@@ -25,7 +25,7 @@ function NumberField({ label, value, onChange, positive = false }: { label: stri
       const next = measurementInput(e.target.value, positive)
       setError(''); onChange(next)
     } catch (e) { setError(`${e instanceof Error ? e.message : '數值無效'}。已保留原有量測，離開欄位會還原。`) }
-  }} onBlur={() => { focused.current = false; setText(value === null ? '' : String(value)) }} />{error && <small id={hintId} role="status">{error}</small>}</label>
+  }} onBlur={() => { focused.current = false; setText(value === null ? '' : String(value)); setError('') }} />{error && <small id={hintId} role="status">{error}</small>}</label>
 }
 function BooleanField({ label, value, onChange, yes, no }: { label: string; value: boolean | null; onChange: (v: boolean | null) => void; yes: string; no: string }) {
   return <label className="survey-field"><span>{label}</span><select value={value === null ? '' : String(value)} onChange={e => onChange(e.target.value === '' ? null : e.target.value === 'true')}><option value="">尚未確認</option><option value="false">{no}</option><option value="true">{yes}</option></select></label>
@@ -247,7 +247,7 @@ export default function SurveyEditor({ campus, onClose }: { campus: Campus; onCl
   return <main className="workspace editor-workspace">
     <aside className="content-panel survey-panel" id="content-panel" tabIndex={-1} aria-label="實勘草稿編輯器">
       <div className="panel-main">
-        <button className="back-link" onClick={() => void leaveEditor()}><ArrowLeft size={17} />返回選路</button><p className="panel-eyebrow">FIELD SURVEY</p><h1 tabIndex={-1} ref={headingRef}>實勘資料編輯器</h1>
+        <button className="back-link" onClick={() => void leaveEditor()}><ArrowLeft size={17} />返回選路</button><h1 tabIndex={-1} ref={headingRef}>實勘資料編輯器</h1>
         <p className="survey-intro">逐段記錄現場，填入自己的量測與照片。</p>
         <div className="survey-local-note"><Save size={18} /><p>草稿僅存在目前瀏覽器，連結不包含草稿。請匯出 JSON 備份，交由團隊審核與發布。</p></div>
         {!ready ? <p role="status">載入本機草稿中…</p> : <>

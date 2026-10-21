@@ -1,0 +1,156 @@
+{
+  "date": "2026-10-20",
+  "browser": "Codex in-app browser",
+  "productionOrigin": "http://127.0.0.1:4173",
+  "checks": [
+    {
+      "name": "Mobile: bottleneck selects corresponding segment",
+      "pass": true
+    },
+    {
+      "name": "Confirmation includes both demo entrances and four segments",
+      "pass": true,
+      "note": "Retested using summary text, since Playwright role query differs from native AX role."
+    },
+    {
+      "name": "Favorites persist after reload",
+      "pass": true
+    },
+    {
+      "name": "Removed favorite can be restored and opened",
+      "pass": true
+    },
+    {
+      "name": "Route share link copied",
+      "pass": true
+    },
+    {
+      "name": "Shared confirmation URL reopens correct route",
+      "pass": true
+    },
+    {
+      "name": "Swap origin and destination updates route direction",
+      "pass": true
+    },
+    {
+      "name": "One matching route opens detail and keeps slope limit",
+      "pass": true
+    },
+    {
+      "name": "Zero matching routes show reasons without choosing another route",
+      "pass": true
+    },
+    {
+      "name": "Survey mode remains empty before field evidence exists",
+      "pass": true
+    },
+    {
+      "name": "Editor saves before quick navigation",
+      "pass": true
+    },
+    {
+      "name": "Invalid negative slope keeps previous valid measurement",
+      "pass": true
+    },
+    {
+      "name": "Full comparison table expands",
+      "pass": true
+    },
+    {
+      "name": "Keyboard Escape closes source dialog and restores trigger focus",
+      "pass": true
+    },
+    {
+      "name": "Production build prepares offline shell in browser",
+      "pass": true
+    },
+    {
+      "name": "375px layout fits without horizontal overflow and primary controls meet 44px",
+      "pass": true
+    }
+  ],
+  "mobile": {
+    "controls": [
+      {
+        "height": 64,
+        "label": "輪行臺大，返回設定",
+        "width": 226
+      },
+      {
+        "height": 48,
+        "label": "路線規劃",
+        "width": 81
+      },
+      {
+        "height": 48,
+        "label": "我的收藏",
+        "width": 81
+      },
+      {
+        "height": 48,
+        "label": "使用說明",
+        "width": 81
+      },
+      {
+        "height": 48,
+        "label": "實勘編輯",
+        "width": 81
+      },
+      {
+        "height": 44,
+        "label": "資料來源",
+        "width": 86
+      },
+      {
+        "height": 44,
+        "label": "步驟 1：設定條件",
+        "width": 44
+      },
+      {
+        "height": 44,
+        "label": "步驟 2：比較路線",
+        "width": 44
+      },
+      {
+        "height": 44,
+        "label": "步驟 3：檢視路段",
+        "width": 44
+      },
+      {
+        "height": 44,
+        "label": "步驟 4：確認動線",
+        "width": 44
+      },
+      {
+        "height": 44,
+        "label": "示範模式",
+        "width": 67
+      },
+      {
+        "height": 44,
+        "label": "已查核路線",
+        "width": 67
+      },
+      {
+        "height": 44,
+        "label": "地圖圖層",
+        "width": 44
+      },
+      {
+        "height": 44,
+        "label": "回到完整路線",
+        "width": 44
+      }
+    ],
+    "documentWidth": 360,
+    "width": 375
+  },
+  "contrast": {
+    "count": 46,
+    "failures": []
+  },
+  "limits": [
+    "Contrast sample covers setup UI text, excludes external map tile labels.",
+    "Actual browser offline disconnection, full assistive technology review and human field testing are pending."
+  ]
+}

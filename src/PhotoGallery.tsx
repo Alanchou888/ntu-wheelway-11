@@ -9,7 +9,13 @@ export default function PhotoGallery({ photos }: { photos: Photo[] }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const photo = photos[index] ?? photos[0]
   const currentIndex = photos[index] ? index : 0
-  useEffect(() => { if (open) dialogRef.current?.showModal(); return () => dialogRef.current?.close() }, [open])
+  useEffect(() => {
+    if (!open) return
+    const trigger = document.activeElement as HTMLElement | null
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    return () => { dialog?.close(); trigger?.focus({ preventScroll: true }) }
+  }, [open])
   const failedPhoto = photo && failed.includes(photo.src)
   const image = (expanded = false) => !photo || failedPhoto ? <div className="photo-placeholder"><ImageIcon size={28} strokeWidth={1.4} /><div><strong>{photo ? '照片暫時無法載入' : '待補實景照片'}</strong><span>{photo ? '可切換其他照片或稍後再試' : '取得現場照片後會顯示於此'}</span></div></div> : <img className={expanded ? 'expanded-photo' : ''} src={photo.src} alt={photo.alt} onError={() => setFailed(previous => previous.includes(photo.src) ? previous : [...previous, photo.src])} />
   const move = (delta: number) => setIndex(previous => Math.max(0, Math.min(photos.length - 1, previous + delta)))

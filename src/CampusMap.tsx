@@ -10,7 +10,7 @@ interface Props {
   pickingEntrance?: boolean; onPickEntrance?: (coordinate: Coordinate) => void
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
-export const colors = { gentle: '#1b7160', direct: '#7164b6', survey: '#1b7160' }
+export const colors = { gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
 
 export default function CampusMap(props: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -30,9 +30,11 @@ export default function CampusMap(props: Props) {
   const refit = () => {
     const map = mapRef.current
     if (!map) return
-    const points = props.routes.flatMap(routeCoordinates)
-    if (points.length) map.fitBounds(L.latLngBounds(points.map(latlng)), { padding: [65, 65], maxZoom: 18, animate: false })
-    else map.fitBounds(L.latLngBounds(props.campus.places.map(p => latlng(p.coordinate))), { padding: [65, 65], maxZoom: 18, animate: false })
+    const current = actions.current
+    const points = current.routes.flatMap(routeCoordinates)
+    const padding: L.PointTuple = map.getSize().x < 500 ? [40, 55] : [70, 70]
+    if (points.length) map.fitBounds(L.latLngBounds(points.map(latlng)), { padding, maxZoom: 18, animate: false })
+    else map.fitBounds(L.latLngBounds(current.campus.places.map(p => latlng(p.coordinate))), { padding, maxZoom: 18, animate: false })
   }
 
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function CampusMap(props: Props) {
     wmsRef.current.on('tileerror', () => setCampusError(true))
     routesRef.current = L.layerGroup().addTo(map)
     facilitiesRef.current = L.layerGroup().addTo(map)
-    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
+    const observer = new ResizeObserver(() => { map.invalidateSize({ pan: false }); refit() })
     observer.observe(rootRef.current)
     return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null }
   }, [props.campus])
@@ -95,7 +97,7 @@ export default function CampusMap(props: Props) {
       const color = props.mode === 'survey' ? '#82918a' : colors[route.id as keyof typeof colors] ?? colors.survey
       const points = routeCoordinates(route).map(latlng)
       L.polyline(points, { color: '#ffffff', weight: isSelected ? 10 : 8, opacity: focus && !isSelected ? .4 : .9, interactive: false, lineCap: 'round' }).addTo(group)
-      const line = L.polyline(points, { color, weight: isSelected ? 5.5 : 4, opacity: focus && !isSelected ? .22 : isSelected ? 1 : .65, dashArray: props.mode === 'survey' ? '6 9' : undefined })
+      const line = L.polyline(points, { color, weight: isSelected ? 5.5 : 4, opacity: focus && !isSelected ? .22 : isSelected ? 1 : .78, dashArray: route.id === 'direct' ? '8 7' : undefined })
       line.on('click', () => actions.current.onSelectRoute(route.id)).addTo(group)
       if (isSelected && (props.screen === 'detail' || props.screen === 'editor')) {
         route.segments.forEach(segment => {
@@ -167,7 +169,7 @@ export default function CampusMap(props: Props) {
   return <section className="map-shell" aria-label="臺大校園路線地圖">
     <div className={`map-canvas ${props.pickingEntrance ? 'picking-entrance' : ''}`} ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />
     {props.pickingEntrance && <div className="map-pick-note" role="status">點選入口位置，座標會填入目前草稿</div>}
-    <div className="map-title-pill"><span className="live-dot" /><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖 × 博雅</span></div>
+    <div className="map-title-pill"><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖書館與博雅教學館</span></div>
     <div className="map-actions">
       <button className={`map-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖層" aria-expanded={layersOpen} title="地圖圖層"><Layers3 size={20} /></button>
       <button className="map-tool" onClick={refit} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} /></button>
