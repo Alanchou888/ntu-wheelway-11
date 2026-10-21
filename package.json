@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build && node scripts/build-community.mjs",
+    "build": "tsc -b && node scripts/clean-build.mjs && vite build && node scripts/build-community.mjs",
     "typecheck": "tsc --noEmit && tsc --project tsconfig.tools.json && tsc --project tsconfig.server.json",
     "preview": "node scripts/dev-community.mjs",
     "test": "vitest run",
