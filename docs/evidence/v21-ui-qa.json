@@ -1,0 +1,180 @@
+{
+  "version": "2.1.0",
+  "checkedAt": "2026-10-21T08:17:38.408Z",
+  "environment": "Codex in-app Chromium browser",
+  "builds": [
+    "development :5173",
+    "production preview :4173"
+  ],
+  "viewports": [
+    "1440x960",
+    "375x812",
+    "320x740",
+    "844x390"
+  ],
+  "checks": [
+    {
+      "name": "Preview creates one explicitly labelled map position",
+      "pass": true
+    },
+    {
+      "name": "Playback advances along the route",
+      "pass": true
+    },
+    {
+      "name": "Playback pauses at a segment boundary",
+      "pass": true
+    },
+    {
+      "name": "Timeline selects the same segment in preview details",
+      "pass": true
+    },
+    {
+      "name": "Timeline also updates full segment details",
+      "pass": true
+    },
+    {
+      "name": "Mobile sheet expands with a labelled button",
+      "pass": true
+    },
+    {
+      "name": "Mobile timeline selects segment four",
+      "pass": true
+    },
+    {
+      "name": "Keyboard Home resets the preview progress",
+      "pass": true
+    },
+    {
+      "name": "Keyboard End reaches the last segment",
+      "pass": true
+    },
+    {
+      "name": "Keyboard End reaches the exact destination and offers replay",
+      "pass": true
+    },
+    {
+      "name": "Mobile playback opens the map and retains compact transport controls",
+      "pass": true
+    },
+    {
+      "name": "Continuous 4x playback completes and stops at the destination",
+      "pass": true
+    },
+    {
+      "name": "Compact preview reports full completion",
+      "pass": true
+    },
+    {
+      "name": "320px mobile viewport has no horizontal page overflow",
+      "pass": true
+    },
+    {
+      "name": "Preview transport, sheet controls and timeline targets are at least 44px at 320px",
+      "pass": true
+    },
+    {
+      "name": "Dragging the sheet handle upward expands the panel",
+      "pass": true
+    },
+    {
+      "name": "Keyboard ArrowDown returns the sheet to summary",
+      "pass": true
+    },
+    {
+      "name": "Keyboard ArrowDown collapses the sheet to map mode",
+      "pass": true
+    },
+    {
+      "name": "Endpoint swap sets Boya as the origin",
+      "pass": true
+    },
+    {
+      "name": "Distance preference orders the two candidate routes",
+      "pass": true
+    },
+    {
+      "name": "Reversed route preview starts with the Boya entrance segment",
+      "pass": true
+    },
+    {
+      "name": "Switching routes resets the preview progress",
+      "pass": true
+    },
+    {
+      "name": "Confirmation reports a successful link copy",
+      "pass": true
+    },
+    {
+      "name": "Reopening the route link restores confirmation with preview controls",
+      "pass": true
+    },
+    {
+      "name": "One candidate opens its segment view and preview directly",
+      "pass": true
+    },
+    {
+      "name": "Zero candidates show the exclusion state",
+      "pass": true
+    },
+    {
+      "name": "Excluded routes cannot leave an active preview or position marker",
+      "pass": true
+    },
+    {
+      "name": "Verified mode keeps an honest empty state",
+      "pass": true
+    },
+    {
+      "name": "Dragging the map turns off automatic following",
+      "pass": true
+    },
+    {
+      "name": "Following can be restored explicitly",
+      "pass": true
+    },
+    {
+      "name": "844px landscape viewport has no horizontal page overflow",
+      "pass": true
+    },
+    {
+      "name": "An existing offline installation updates from v2.0 to the production v2.1 build",
+      "pass": true
+    },
+    {
+      "name": "1440px production layout keeps the map, route panel and preview dock visible",
+      "pass": true
+    },
+    {
+      "name": "375px production layout has no horizontal page overflow",
+      "pass": true
+    },
+    {
+      "name": "Mobile sheet keeps map attribution visible",
+      "pass": true
+    },
+    {
+      "name": "Production browser has no captured application-origin JavaScript errors",
+      "pass": true
+    },
+    {
+      "name": "320px production navigation, sheet and compact transport targets meet the 44px minimum",
+      "pass": true
+    },
+    {
+      "name": "Production shell finishes caching its own versioned assets and snapshot",
+      "pass": true
+    }
+  ],
+  "screenshots": [
+    "v21-desktop-preview.png",
+    "v21-mobile-timeline.png",
+    "v21-mobile-map.png"
+  ],
+  "limits": [
+    "Browser checks are automation evidence, not human participant or field-survey records.",
+    "No real device network disconnect, screen-reader session or OS reduced-motion setting change was performed. Reduced-motion presentation is covered by automated rendering tests.",
+    "The background-pause event handler and real survey-photo dialogs still need real-device validation.",
+    "Link-copy confirmation and URL reopening were checked. System clipboard contents were not verified."
+  ]
+}

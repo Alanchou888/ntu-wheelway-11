@@ -8,6 +8,8 @@ interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
   onSelectRoute: (id: string) => void; onSelectSegment: (id: string) => void
   pickingEntrance?: boolean; onPickEntrance?: (coordinate: Coordinate) => void
+  layoutKey?: string; onMapDrag?: () => void
+  preview?: { coordinate: Coordinate; following: boolean; reducedMotion: boolean }
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
 export const colors = { gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
@@ -18,6 +20,7 @@ export default function CampusMap(props: Props) {
   const routesRef = useRef<L.LayerGroup | null>(null)
   const facilitiesRef = useRef<L.LayerGroup | null>(null)
   const wmsRef = useRef<L.TileLayer.WMS | null>(null)
+  const previewRef = useRef<L.Marker | null>(null)
   const actions = useRef(props)
   actions.current = props
   const [layersOpen, setLayersOpen] = useState(false)
@@ -27,20 +30,36 @@ export default function CampusMap(props: Props) {
   const [campusError, setCampusError] = useState(false)
   const geometryKey = JSON.stringify(props.routes.map(routeCoordinates))
 
+  const visiblePadding = () => {
+    const rect = rootRef.current!.getBoundingClientRect()
+    const workspace = rootRef.current?.closest('.route-workspace')
+    const sheet = workspace?.querySelector('.map-sheet')?.getBoundingClientRect()
+    const dock = workspace?.querySelector('.experience-dock')?.getBoundingClientRect()
+    const mobile = window.matchMedia('(max-width: 760px), (max-height: 540px) and (max-width: 1000px)').matches
+    const left = sheet && !mobile ? Math.max(24, sheet.right - rect.left + 24) : 24
+    const bottom = sheet && mobile ? rect.bottom - sheet.top + 16 : dock ? rect.bottom - dock.top + 24 : 66
+    const right = mobile ? 24 : 76
+    const top = mobile && ['detail', 'confirm'].includes(actions.current.screen) ? 62 : 76
+    return { topLeft: [left, top] as L.PointTuple, bottomRight: [right, bottom] as L.PointTuple,
+      usable: rect.width - left - right > 120 && rect.height - bottom - top > 65 }
+  }
+
   const refit = () => {
     const map = mapRef.current
     if (!map) return
     const current = actions.current
     const points = current.routes.flatMap(routeCoordinates)
-    const padding: L.PointTuple = map.getSize().x < 500 ? [40, 55] : [70, 70]
-    if (points.length) map.fitBounds(L.latLngBounds(points.map(latlng)), { padding, maxZoom: 18, animate: false })
-    else map.fitBounds(L.latLngBounds(current.campus.places.map(p => latlng(p.coordinate))), { padding, maxZoom: 18, animate: false })
+    const padding = visiblePadding()
+    const options = padding.usable ? { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight } : { padding: [35, 40] as L.PointTuple }
+    if (points.length) map.fitBounds(L.latLngBounds(points.map(latlng)), { ...options, maxZoom: 18, animate: false })
+    else map.fitBounds(L.latLngBounds(current.campus.places.map(p => latlng(p.coordinate))), { ...options, maxZoom: 18, animate: false })
   }
 
   useEffect(() => {
     if (!rootRef.current) return
     const map = L.map(rootRef.current, { zoomControl: false, minZoom: 15, maxZoom: 20, scrollWheelZoom: true, attributionControl: true }).setView([25.0182, 121.5386], 17)
     mapRef.current = map
+    map.on('dragstart', () => actions.current.onMapDrag?.())
     map.on('click', (event: L.LeafletMouseEvent) => {
       if (actions.current.pickingEntrance) actions.current.onPickEntrance?.([event.latlng.lng, event.latlng.lat])
     })
@@ -76,7 +95,7 @@ export default function CampusMap(props: Props) {
     facilitiesRef.current = L.layerGroup().addTo(map)
     const observer = new ResizeObserver(() => { map.invalidateSize({ pan: false }); refit() })
     observer.observe(rootRef.current)
-    return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null }
+    return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null; previewRef.current = null }
   }, [props.campus])
 
   useEffect(() => {
@@ -165,6 +184,25 @@ export default function CampusMap(props: Props) {
   }, [showRamps, props.campus])
 
   useEffect(() => { refit() }, [geometryKey, props.campus]) // Editing a measurement must not reset the map viewport.
+
+  useEffect(() => {
+    const timer = window.setTimeout(refit, 240)
+    return () => clearTimeout(timer)
+  }, [props.layoutKey, props.screen, props.campus])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (!props.preview) { previewRef.current?.remove(); previewRef.current = null; return }
+    const { coordinate, following, reducedMotion } = props.preview
+    if (!previewRef.current) {
+      const icon = L.divIcon({ className: 'tour-position-marker', html: '<span class="tour-position-dot"></span><span class="tour-position-label">預演位置</span>', iconSize: [36, 36], iconAnchor: [18, 18] })
+      previewRef.current = L.marker(latlng(coordinate), { icon, interactive: false, keyboard: false, zIndexOffset: 600 }).addTo(map)
+      previewRef.current.getElement()?.setAttribute('aria-hidden', 'true')
+    } else previewRef.current.setLatLng(latlng(coordinate))
+    const padding = visiblePadding()
+    if (following && padding.usable) map.panInside(latlng(coordinate), { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight, animate: !reducedMotion, duration: .2 })
+  }, [props.preview, props.layoutKey, props.campus])
 
   return <section className="map-shell" aria-label="臺大校園路線地圖">
     <div className={`map-canvas ${props.pickingEntrance ? 'picking-entrance' : ''}`} ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />

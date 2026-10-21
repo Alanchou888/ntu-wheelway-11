@@ -12,8 +12,13 @@ import PhotoGallery from './PhotoGallery'
 import PrintableRoute from './PrintableRoute'
 import OfflineStatus from './OfflineStatus'
 import { useCampusData } from './useCampusData'
+import MapSheet from './MapSheet'
+import type { SheetSize } from './MapSheet'
+import RouteExplorer from './RouteExplorer'
+import { useMediaQuery, useRouteTour } from './useRouteTour'
 import './product.css'
 import './campus-design.css'
+import './route-experience.css'
 
 const SurveyEditor = lazy(() => import('./SurveyEditor'))
 
@@ -60,14 +65,14 @@ function EntranceCard({ entrance, letter }: { entrance: Entrance; letter: string
   return <details className="entrance-card"><summary><span className="entry-letter">{letter}</span><div><span>{letter === 'A' ? '起點入口' : '終點入口'}</span><strong>{entrance.name}</strong></div><ChevronDown size={17} /></summary><div className="entry-body"><p>{entrance.source}</p><p>查核日期：{formatDate(entrance.verifiedAt)}</p><PhotoGallery key={entrance.id} photos={entrance.photos} /></div></details>
 }
 
-function SegmentInfo({ segment }: { segment: Segment }) {
+function SegmentInfo({ segment, onOpenPhoto }: { segment: Segment; onOpenPhoto: () => void }) {
   const facts = [
     ['最大坡度', metricValue(segment.maxSlopePercent, '%')], ['有效路寬', metricValue(segment.minWidthM, ' m')],
     ['最大階差', metricValue(segment.stepHeightCm, ' cm')], ['坡道長度', metricValue(segment.rampLengthM, ' m')],
     ['路面條件', segment.surface ?? '尚無資料'], ['階梯', segment.hasStairs === null ? '尚未確認' : segment.hasStairs ? '有階梯' : '無階梯'],
   ]
   return <article className="segment-info"><div className="section-heading"><h3>{segment.name}</h3><span className={`tiny-badge ${segment.status === 'demo' ? 'amber' : ''}`}>{segmentLabel(segment)}</span></div><dl className="fact-grid">{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    <PhotoGallery key={segment.id} photos={segment.photos} />
+    <PhotoGallery key={segment.id} photos={segment.photos} onOpen={onOpenPhoto} />
     <div className={`obstacle-note ${segment.obstacles.length ? 'has-obstacle' : ''}`}><Info size={17} /><p>{segment.obstacles.length ? segment.obstacles.join('、') : segment.status === 'demo' ? '此段未設定額外障礙，實際情況待查核。' : '查核紀錄未列固定障礙，仍請留意現場。'}</p></div>
     <details className="evidence-details"><summary>資料依據與查核資訊<ChevronDown size={15} /></summary><div><p><span>查核狀態</span>{segmentLabel(segment)}</p><p><span>查核日期</span>{formatDate(segment.verifiedAt)}</p><p><span>圖資取得</span>{formatDate(segment.retrievedAt)}</p><p className="source-text">{segment.source}</p>{segment.sourceUrl && <a href={segment.sourceUrl} target="_blank" rel="noreferrer">查看來源 <ArrowRight size={13} /></a>}</div></details>
   </article>
@@ -83,6 +88,8 @@ export default function App() {
   const [favoriteMessage, setFavoriteMessage] = useState('')
   const [undoFavorites, setUndoFavorites] = useState<Favorite[] | null>(null)
   const [profileFeedback, setProfileFeedback] = useState('')
+  const [sheetSize, setSheetSize] = useState<SheetSize>('half')
+  const mobile = useMediaQuery('(max-width: 760px), (max-height: 540px) and (max-width: 1000px)')
   const panelRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -92,6 +99,7 @@ export default function App() {
         try { await flushSurveyDraft() }
         catch { window.history.replaceState(null, '', toHash(state)); return }
       }
+      if (next.screen !== state.screen) setSheetSize('half')
       setState(next)
     }
     window.addEventListener('hashchange', handler)
@@ -100,6 +108,7 @@ export default function App() {
   const navigate = async (patch: Partial<NavigationState>) => {
     if (state.screen === 'editor') { try { await flushSurveyDraft() } catch { return } }
     const next = { ...state, ...patch }
+    if (next.screen !== state.screen) setSheetSize('half')
     setState(next)
     const hash = toHash(next)
     if (window.location.hash !== hash) window.location.hash = hash
@@ -114,7 +123,10 @@ export default function App() {
   const routes = useMemo(() => candidates.accepted.map(r => state.origin === r.originEntrance.placeId ? r : reverseRoute(r)), [candidates, state.origin])
   const resolved = resolveSharedRoute(routes, state)
   const selected = resolved.route
-  const activeSegment = selected?.segments.find(s => s.id === state.segmentId) ?? selected?.segments[0]
+  const baseSegment = selected?.segments.find(s => s.id === state.segmentId) ?? selected?.segments[0]
+  const tourRoute = selected && !resolved.problem && ['detail', 'confirm'].includes(state.screen) && (state.mode === 'demo' || !surveyLoading) ? selected : null
+  const tour = useRouteTour(tourRoute, state.segmentId)
+  const activeSegment = tourRoute && tour.engaged && tour.position ? tour.position.leg.segment : baseSegment
   const destination = state.origin === 'library' ? 'boya' : 'library'
   const step = screens.findIndex(s => s.id === state.screen)
   const isDemo = state.mode === 'demo'
@@ -123,7 +135,6 @@ export default function App() {
     panelRef.current?.scrollTo({ top: 0 })
     const heading = document.getElementById('panel-heading')
     heading?.focus({ preventScroll: true })
-    if (window.innerWidth <= 760 && state.screen !== 'setup') panelRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [state.screen, loading])
 
   const chooseMode = (mode: Mode) => navigate({ mode, screen: state.screen === 'setup' ? 'setup' : 'compare', routeId: '', segmentId: '' })
@@ -145,9 +156,21 @@ export default function App() {
     if (persistFavorites([favorite, ...favorites.filter(f => f.key !== favorite.key)])) { setUndoFavorites(null); setFavoriteMessage('已收藏在這個瀏覽器，可從「我的收藏」開啟。') }
   }
   const remember = () => { try { savePreferences(state); setProfileFeedback('已記住輪椅類型、偏好與通行條件。') } catch { setProfileFeedback('這個瀏覽器無法記住設定，仍可繼續選路。') } }
+  const inspectTourSegment = (segment: Segment) => {
+    tour.pause()
+    void navigate({ screen: 'detail', routeId: selected?.id ?? '', segmentId: segment.id })
+    if (mobile) setSheetSize('full')
+  }
+  const startTour = () => {
+    if (mobile) {
+      setSheetSize('map')
+      requestAnimationFrame(() => panelRef.current?.querySelector<HTMLButtonElement>('.sheet-collapsed .tour-play')?.focus({ preventScroll: true }))
+    }
+  }
+  const explorer = tourRoute ? <RouteExplorer route={tourRoute} tour={tour} onInspect={inspectTourSegment} onStart={startTour} /> : null
 
-  return <div className="app">
-    <a href="#content-panel" className="skip-link" onClick={e => { e.preventDefault(); document.getElementById('content-panel')?.focus() }}>跳至操作內容</a>
+  return <div className={`app ${campus && step >= 0 ? 'map-experience' : ''}`}>
+    <a href="#content-panel" className="skip-link" onClick={e => { e.preventDefault(); setSheetSize('full'); requestAnimationFrame(() => document.getElementById('content-panel')?.focus()) }}>跳至操作內容</a>
     <header className="topbar">
       <button className="brand" onClick={() => navigate({ screen: 'setup' })} aria-label="輪行臺大，返回設定"><span className="brand-symbol"><RouteIcon size={27} strokeWidth={2} aria-hidden="true" /></span><span><strong>輪行臺大</strong><small>校園無障礙路線</small></span></button>
       <nav className="product-nav" aria-label="主要功能">{[{ screen: 'setup' as const, label: '路線規劃', icon: RouteIcon }, { screen: 'saved' as const, label: '我的收藏', icon: Bookmark }, { screen: 'help' as const, label: '使用說明', icon: BookOpen }, { screen: 'editor' as const, label: '實勘編輯', icon: ClipboardCheck }].map(item => <button key={item.screen} className={(item.screen === 'setup' ? step >= 0 : state.screen === item.screen) ? 'active' : ''} aria-current={(item.screen === 'setup' ? step >= 0 : state.screen === item.screen) ? 'page' : undefined} onClick={() => navigate({ screen: item.screen })}><item.icon size={17} aria-hidden="true" /><span>{item.label}</span>{item.screen === 'saved' && favorites.length > 0 && <small>{favorites.length}</small>}</button>)}</nav>
@@ -158,9 +181,10 @@ export default function App() {
     </div>}
     <div className={`mode-strip ${isDemo && step >= 0 ? 'demo' : 'survey'}`} role="status">{state.screen === 'editor' ? <><ClipboardCheck size={16} aria-hidden="true" /><strong>本機實勘草稿</strong><span>填寫後匯出，交由團隊審核</span></> : step < 0 ? <><Info size={16} aria-hidden="true" /><strong>校園試用版</strong><span>總圖書館與博雅教學館周邊</span></> : isDemo ? <><TriangleAlert size={16} aria-hidden="true" /><strong>示範模式</strong><span>坡度、路寬與入口尚未實勘</span><span className="strip-extra">供選路流程測試</span></> : <><ShieldCheck size={16} aria-hidden="true" /><strong>查核模式</strong><span>全程及兩端入口均需有實勘證據</span></>}</div>
 
-    {state.screen === 'help' ? <HelpPage onDemo={() => navigate({ screen: 'setup', mode: 'demo', routeId: '', segmentId: '' })} onEditor={() => navigate({ screen: 'editor' })} onSources={() => setShowSources(true)} /> : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={allRoutes} onOpen={favorite => navigate(fromHash(favorite.hash))} onRemove={key => { const previous = favorites; if (persistFavorites(favorites.filter(f => f.key !== key))) { setUndoFavorites(previous); setFavoriteMessage('已移除收藏，可立即復原。') } }} onUndo={() => { if (undoFavorites && persistFavorites(undoFavorites)) { setUndoFavorites(null); setFavoriteMessage('已復原收藏。') } }} canUndo={!!undoFavorites} onPlan={() => navigate({ screen: 'setup' })} feedback={favoriteMessage} /> : loading && !campus ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError && !campus || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。你也可以先閱讀使用說明。</p><button className="button primary" onClick={retryCampus}>重新載入圖資</button><button className="button secondary" onClick={() => navigate({ screen: 'help' })}>使用說明</button></main> : state.screen === 'editor' ? <Suspense fallback={<main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>載入實勘編輯器</h1></main>}><SurveyEditor campus={campus} onClose={() => navigate({ screen: 'setup' })} /></Suspense> : <main className="workspace">
-      <aside className="content-panel" id="content-panel" tabIndex={-1} ref={panelRef} aria-label="路線設定與資訊">
+    {state.screen === 'help' ? <HelpPage onDemo={() => navigate({ screen: 'setup', mode: 'demo', routeId: '', segmentId: '' })} onEditor={() => navigate({ screen: 'editor' })} onSources={() => setShowSources(true)} /> : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={allRoutes} onOpen={favorite => navigate(fromHash(favorite.hash))} onRemove={key => { const previous = favorites; if (persistFavorites(favorites.filter(f => f.key !== key))) { setUndoFavorites(previous); setFavoriteMessage('已移除收藏，可立即復原。') } }} onUndo={() => { if (undoFavorites && persistFavorites(undoFavorites)) { setUndoFavorites(null); setFavoriteMessage('已復原收藏。') } }} canUndo={!!undoFavorites} onPlan={() => navigate({ screen: 'setup' })} feedback={favoriteMessage} /> : loading && !campus ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError && !campus || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。你也可以先閱讀使用說明。</p><button className="button primary" onClick={retryCampus}>重新載入圖資</button><button className="button secondary" onClick={() => navigate({ screen: 'help' })}>使用說明</button></main> : state.screen === 'editor' ? <Suspense fallback={<main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>載入實勘編輯器</h1></main>}><SurveyEditor campus={campus} onClose={() => navigate({ screen: 'setup' })} /></Suspense> : <main className="workspace route-workspace" data-sheet={sheetSize} data-screen={state.screen}>
+      <MapSheet size={sheetSize} onSize={setSheetSize} mobile={mobile} panelRef={panelRef} collapsed={tourRoute ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} /> : <div className="sheet-route-summary"><div><strong>{state.screen === 'setup' ? '規劃校園路線' : routes.length ? `${routes.length} 條${isDemo ? '示範' : '查核'}路線` : '目前無可用路線'}</strong><span>{placeNames[state.origin]} → {placeNames[destination]}</span></div><button onClick={() => setSheetSize('half')}>{state.screen === 'setup' ? '設定條件' : '查看資訊'}</button></div>}>
         <div className="panel-main" key={state.screen}>
+          {mobile && explorer}
           {state.screen === 'setup' && <>
             <h1 id="panel-heading" tabIndex={-1}>規劃校園路線</h1><p className="panel-intro">選擇起終點，再比較沿途的通行條件。</p>
             <form id="route-planner" onSubmit={e => { e.preventDefault(); query() }} className="route-form">
@@ -186,7 +210,7 @@ export default function App() {
             <button className="back-link" onClick={() => navigate({ screen: 'compare' })}><ArrowLeft size={17} aria-hidden="true" />返回比較</button><h1 id="panel-heading" tabIndex={-1}>路段資訊</h1><div className="detail-route-title"><span className={`route-color-dot ${selected.id}`} />{selected.name}<span>{formatDistance(metrics(selected).distanceM)}</span></div><p className="detail-route-description">{selected.description}</p>
             <BottleneckList route={selected} onSelect={id => navigate({ segmentId: id })} />
             <div className="segment-tabs" role="group" aria-label="選擇路段">{selected.segments.map((segment, i) => <button key={segment.id} aria-label={`路段 ${i + 1}：${segment.name}`} aria-pressed={activeSegment.id === segment.id} className={activeSegment.id === segment.id ? 'active' : ''} onClick={() => navigate({ segmentId: segment.id })}><span>{i + 1}</span><div><strong>{segment.name}</strong><small>{formatDistance(lineDistance(segment.coordinates))}</small></div><ChevronRight size={15} /></button>)}</div>
-            <SegmentInfo segment={activeSegment} />
+            <SegmentInfo segment={activeSegment} onOpenPhoto={tour.pause} />
             <div className="sticky-panel-actions"><button className="button primary wide" onClick={() => navigate({ screen: 'confirm', routeId: selected.id })}>選擇這條路線<Check size={18} /></button></div>
           </>}
 
@@ -200,8 +224,9 @@ export default function App() {
           </>}
         </div>
         {state.screen === 'setup' && <div className="setup-actions"><button type="submit" form="route-planner" className="button primary wide search-button">比較路線<ArrowRight size={19} aria-hidden="true" /></button><p className="form-footnote">{isDemo ? '示範動線的路況數值皆為模擬。' : '未查核路段不列入候選路線。'}</p></div>}
-      </aside>
-      <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} onSelectRoute={id => navigate({ routeId: id, segmentId: '' })} onSelectSegment={id => navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id })} />
+      </MapSheet>
+      <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => navigate({ routeId: id, segmentId: '' })} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
+      {!mobile && explorer && <div className="experience-dock">{explorer}</div>}
     </main>}
     <OfflineStatus snapshotDate={campus?.retrievedAt} beforeUpdate={async () => { try { await flushSurveyDraft(); return document.documentElement.dataset.surveyUnsaved !== 'true' } catch { return false } }} />
     {showSources && campus && <SourceDialog campus={campus} onClose={() => setShowSources(false)} />}
