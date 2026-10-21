@@ -9,11 +9,12 @@ const labels = { map: '地圖', half: '摘要', full: '展開' }
 interface Props {
   size: SheetSize; onSize: (size: SheetSize) => void; mobile: boolean
   panelRef: Ref<HTMLElement>; children: ReactNode; collapsed: ReactNode
+  label?: string
 }
-export default function MapSheet({ size, onSize, mobile, panelRef, children, collapsed }: Props) {
+export default function MapSheet({ size, onSize, mobile, panelRef, children, collapsed, label='路線資訊' }: Props) {
   const gesture = useRef<{ y: number; pointer: number; dragged: boolean } | null>(null)
   const shift = (direction: number) => onSize(sizes[Math.max(0, Math.min(2, sizes.indexOf(size) + direction))])
-  return <aside className="content-panel map-sheet" data-size={size} id="content-panel" tabIndex={-1} ref={panelRef} aria-label="路線設定與資訊">
+  return <aside className="content-panel map-sheet" data-size={size} id="content-panel" tabIndex={-1} ref={panelRef} aria-label={label==='路線資訊'?'路線設定與資訊':label}>
     <div className="sheet-controls">
       <button className="sheet-grip" aria-label={`調整面板高度，目前${labels[size]}，可使用上下方向鍵`} onPointerDown={event => {
         gesture.current = { y: event.clientY, pointer: event.pointerId, dragged: false }
@@ -30,7 +31,7 @@ export default function MapSheet({ size, onSize, mobile, panelRef, children, col
         gesture.current = null
       }} onKeyDown={event => {
         if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); shift(event.key === 'ArrowUp' ? 1 : -1) }
-      }}><span aria-hidden="true" /><span>路線資訊</span></button>
+      }}><span aria-hidden="true" /><span>{label}</span></button>
       <div className="sheet-size-buttons" role="group" aria-label="面板高度">{[
         { size: 'map' as const, icon: Map }, { size: 'half' as const, icon: AlignLeft }, { size: 'full' as const, icon: Maximize2 },
       ].map(item => <button key={item.size} onClick={() => onSize(item.size)} aria-pressed={size === item.size} aria-label={`${labels[item.size]}面板`}><item.icon size={16} aria-hidden="true" /><span>{labels[item.size]}</span></button>)}</div>

@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Accessibility, ArrowDownUp, ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Copy, Footprints, Info, LoaderCircle, MessageSquare, Mountain, Printer, Route as RouteIcon, ShieldCheck, SlidersHorizontal, TriangleAlert, X, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CampusMap from './CampusMap'
-import type { Campus, Entrance, Mode, NavigationState, Route, Screen, Segment } from './types'
+import type { Campus, CatalogCategory, CatalogPlace, Entrance, Mode, NavigationState, Route, Screen, Segment } from './types'
 import { buildDemoRoutes, formatDate, formatDistance, fromHash, lineDistance, lineMidpoint, metrics, placeNames, reverseRoute, segmentLabel, toHash } from './routes'
 import { BottleneckList, ComparisonSummary } from './RouteInsights'
 import { daysSince, emptyLimits, favoriteFor, flushSurveyDraft, oldestVerification, readFavorites, readInitialNavigation, resolveSharedRoute, savePreferences, selectCandidates, writeFavorites } from './product'
@@ -19,6 +19,9 @@ import { useMediaQuery, useRouteTour } from './useRouteTour'
 import { CommunityDialog, CommunitySection } from './Community'
 import { useCommunity } from './useCommunity'
 import { communitySummary } from './community-model'
+import {usePlaceCatalog} from './usePlaceCatalog'
+import {categoryLabels,clearRecentPlaces,findPlaces,placeEndpointPatch,readRecentPlaces,rememberPlace} from './places'
+import {CatalogStatus,PlaceCard,PlaceList,PlaceSearch} from './PlaceDiscovery'
 import './product.css'
 import './campus-design.css'
 import './route-experience.css'
@@ -84,6 +87,15 @@ function SegmentInfo({ segment, onOpenPhoto }: { segment: Segment; onOpenPhoto: 
 export default function App() {
   const [state, setState] = useState<NavigationState>(readInitialNavigation)
   const { campus, survey, loading, loadError, surveyLoading, surveyError, retryCampus, retrySurvey } = useCampusData()
+  const placeData=usePlaceCatalog(campus)
+  const catalog=placeData.catalog
+  const [placeQuery,setPlaceQuery]=useState('')
+  const [recentPlaces,setRecentPlaces]=useState<string[]>([])
+  const [placeFeedback,setPlaceFeedback]=useState('')
+  const discovering=!!state.placeId||!!state.category||!!placeQuery.trim()
+  const selectedPlace=catalog?.places.find(p=>p.id===state.placeId)
+  const foundPlaces=useMemo(()=>catalog?findPlaces(catalog.places,placeQuery,state.category):[],[catalog,placeQuery,state.category])
+  useEffect(()=>{if(catalog)setRecentPlaces(readRecentPlaces(catalog.places))},[catalog])
   const [showSources, setShowSources] = useState(false)
   const [copyMessage, setCopyMessage] = useState('')
   const [copyFallback, setCopyFallback] = useState(false)
@@ -97,6 +109,7 @@ export default function App() {
   const community = useCommunity(!!campus)
   const mobile = useMediaQuery('(max-width: 760px), (max-height: 540px) and (max-width: 1000px)')
   const panelRef = useRef<HTMLElement>(null)
+  useEffect(()=>{panelRef.current?.scrollTo({top:0})},[state.placeId,state.category,placeQuery])
 
   useEffect(() => {
     const handler = async () => {
@@ -113,7 +126,8 @@ export default function App() {
   }, [state])
   const navigate = async (patch: Partial<NavigationState>) => {
     if (state.screen === 'editor') { try { await flushSurveyDraft() } catch { return } }
-    const next = { ...state, ...patch }
+    const next = { ...state, ...(patch.screen?{placeId:undefined,category:undefined}:{}), ...patch }
+    if(patch.screen){setPlaceQuery('');setPlaceFeedback('')}
     if (next.screen !== state.screen) setSheetSize('half')
     setState(next)
     const hash = toHash(next)
@@ -131,7 +145,7 @@ export default function App() {
   const resolved = resolveSharedRoute(routes, state)
   const selected = resolved.route
   const baseSegment = selected?.segments.find(s => s.id === state.segmentId) ?? selected?.segments[0]
-  const tourRoute = selected && !resolved.problem && ['detail', 'confirm'].includes(state.screen) && (state.mode === 'demo' || !surveyLoading) ? selected : null
+  const tourRoute = selected && !resolved.problem && !discovering && ['detail', 'confirm'].includes(state.screen) && (state.mode === 'demo' || !surveyLoading) ? selected : null
   const tour = useRouteTour(tourRoute, state.segmentId)
   const activeSegment = tourRoute && tour.engaged && tour.position ? tour.position.leg.segment : baseSegment
   const destination = state.origin === 'library' ? 'boya' : 'library'
@@ -185,6 +199,30 @@ export default function App() {
     return true
   }
 
+  const clearDiscovery=()=>{
+    setPlaceQuery('');setPlaceFeedback('');void navigate({placeId:undefined,category:undefined});setSheetSize('half')
+    requestAnimationFrame(()=>document.getElementById('panel-heading')?.focus({preventScroll:true}))
+  }
+  const choosePlace=(place:CatalogPlace)=>{
+    tour.pause();setPlaceQuery('');setPlaceFeedback('')
+    const recent=rememberPlace(place.id,recentPlaces);setRecentPlaces(recent.ids)
+    if(!recent.saved)setPlaceFeedback('目前瀏覽器無法保存最近查看，地點仍可使用。')
+    void navigate({placeId:place.id});setSheetSize('half')
+  }
+  const chooseCategory=(category:CatalogCategory)=>{
+    tour.pause();setPlaceQuery('');setPlaceFeedback('');void navigate({category:state.category===category?undefined:category,placeId:undefined});setSheetSize('half')
+    requestAnimationFrame(()=>document.getElementById('place-heading')?.focus({preventScroll:true}))
+  }
+  const setPlaceEndpoint=(action:'from'|'to')=>{
+    if(!selectedPlace)return
+    const patch=placeEndpointPatch(selectedPlace,action)
+    if(!patch)return
+    void navigate(patch);setPlaceQuery('');setPlaceFeedback(`已將${selectedPlace.name}設為${action==='from'?'起點':'終點'}，請確認路線入口與通行條件。`)
+    requestAnimationFrame(()=>document.getElementById('panel-heading')?.focus({preventScroll:true}))
+  }
+  const placeEntrances=selectedPlace?.routePlaceId?[...new Map(routes.flatMap(route=>[route.originEntrance,route.destinationEntrance]).filter(entrance=>entrance.placeId===selectedPlace.routePlaceId).map(entrance=>[entrance.id,entrance])).values()]:[]
+  const collapsedPlace=discovering?<div className="sheet-route-summary"><div><strong>{selectedPlace?.name??(state.category?`附近${categoryLabels[state.category]}`:'搜尋地點')}</strong><span>{selectedPlace?'公開點位，通行狀態待查核':`${foundPlaces.length} 個符合的地點`}</span></div><button onClick={()=>setSheetSize('half')}>查看地點</button></div>:null
+
   return <div className={`app ${campus && step >= 0 ? 'map-experience' : ''}`}>
     <a href="#content-panel" className="skip-link" onClick={e => { e.preventDefault(); setSheetSize('full'); requestAnimationFrame(() => document.getElementById('content-panel')?.focus()) }}>跳至操作內容</a>
     <header className="topbar">
@@ -197,9 +235,13 @@ export default function App() {
     </div>}
     <div className={`mode-strip ${isDemo && step >= 0 ? 'demo' : 'survey'}`} role="status">{state.screen === 'editor' ? <><ClipboardCheck size={16} aria-hidden="true" /><strong>本機實勘草稿</strong><span>填寫後匯出，交由團隊審核</span></> : step < 0 ? <><Info size={16} aria-hidden="true" /><strong>校園試用版</strong><span>總圖書館與博雅教學館周邊</span></> : isDemo ? <><TriangleAlert size={16} aria-hidden="true" /><strong>示範模式</strong><span>坡度、路寬與入口尚未實勘</span><span className="strip-extra">供選路流程測試</span></> : <><ShieldCheck size={16} aria-hidden="true" /><strong>查核模式</strong><span>全程及兩端入口均需有實勘證據</span></>}</div>
 
-    {state.screen === 'help' ? <HelpPage onDemo={() => navigate({ screen: 'setup', mode: 'demo', routeId: '', segmentId: '' })} onEditor={() => navigate({ screen: 'editor' })} onSources={() => setShowSources(true)} /> : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={allRoutes} onOpen={favorite => navigate(fromHash(favorite.hash))} onRemove={key => { const previous = favorites; if (persistFavorites(favorites.filter(f => f.key !== key))) { setUndoFavorites(previous); setFavoriteMessage('已移除收藏，可立即復原。') } }} onUndo={() => { if (undoFavorites && persistFavorites(undoFavorites)) { setUndoFavorites(null); setFavoriteMessage('已復原收藏。') } }} canUndo={!!undoFavorites} onPlan={() => navigate({ screen: 'setup' })} feedback={favoriteMessage} /> : loading && !campus ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError && !campus || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。你也可以先閱讀使用說明。</p><button className="button primary" onClick={retryCampus}>重新載入圖資</button><button className="button secondary" onClick={() => navigate({ screen: 'help' })}>使用說明</button></main> : state.screen === 'editor' ? <Suspense fallback={<main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>載入實勘編輯器</h1></main>}><SurveyEditor campus={campus} onClose={() => navigate({ screen: 'setup' })} /></Suspense> : <main className="workspace route-workspace" data-sheet={sheetSize} data-screen={state.screen}>
-      <MapSheet size={sheetSize} onSize={setSheetSize} mobile={mobile} panelRef={panelRef} collapsed={tourRoute ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} /> : <div className="sheet-route-summary"><div><strong>{state.screen === 'setup' ? '規劃校園路線' : routes.length ? `${routes.length} 條${isDemo ? '示範' : '查核'}路線` : '目前無可用路線'}</strong><span>{placeNames[state.origin]} → {placeNames[destination]}</span></div><button onClick={() => setSheetSize('half')}>{state.screen === 'setup' ? '設定條件' : '查看資訊'}</button></div>}>
+    {state.screen === 'help' ? <HelpPage onDemo={() => navigate({ screen: 'setup', mode: 'demo', routeId: '', segmentId: '' })} onEditor={() => navigate({ screen: 'editor' })} onSources={() => setShowSources(true)} /> : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={allRoutes} onOpen={favorite => navigate(fromHash(favorite.hash))} onRemove={key => { const previous = favorites; if (persistFavorites(favorites.filter(f => f.key !== key))) { setUndoFavorites(previous); setFavoriteMessage('已移除收藏，可立即復原。') } }} onUndo={() => { if (undoFavorites && persistFavorites(undoFavorites)) { setUndoFavorites(null); setFavoriteMessage('已復原收藏。') } }} canUndo={!!undoFavorites} onPlan={() => navigate({ screen: 'setup' })} feedback={favoriteMessage} /> : loading && !campus ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError && !campus || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。你也可以先閱讀使用說明。</p><button className="button primary" onClick={retryCampus}>重新載入圖資</button><button className="button secondary" onClick={() => navigate({ screen: 'help' })}>使用說明</button></main> : state.screen === 'editor' ? <Suspense fallback={<main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>載入實勘編輯器</h1></main>}><SurveyEditor campus={campus} onClose={() => navigate({ screen: 'setup' })} /></Suspense> : <main className={`workspace route-workspace ${catalog?'has-discovery':''}`} data-discovering={discovering} data-sheet={sheetSize} data-screen={state.screen}>
+      <MapSheet label={discovering?'地點資訊':undefined} size={sheetSize} onSize={setSheetSize} mobile={mobile} panelRef={panelRef} collapsed={discovering?collapsedPlace:tourRoute ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} /> : <div className="sheet-route-summary"><div><strong>{state.screen === 'setup' ? '規劃校園路線' : routes.length ? `${routes.length} 條${isDemo ? '示範' : '查核'}路線` : '目前無可用路線'}</strong><span>{placeNames[state.origin]} → {placeNames[destination]}</span></div><button onClick={() => setSheetSize('half')}>{state.screen === 'setup' ? '設定條件' : '查看資訊'}</button></div>}>
         <div className="panel-main" key={state.screen}>
+          {placeFeedback&&<p className="place-endpoint-feedback" role="status">{placeFeedback}</p>}
+          {discovering&&selectedPlace&&<CatalogStatus loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/>}
+          {discovering&&catalog&&(selectedPlace?<PlaceCard key={selectedPlace.id} place={selectedPlace} catalog={catalog} entrances={placeEntrances} mode={state.mode} onClose={()=>{void navigate({placeId:undefined});requestAnimationFrame(()=>document.getElementById(state.category?'place-heading':'panel-heading')?.focus({preventScroll:true}))}} onEndpoint={setPlaceEndpoint} onChoose={choosePlace} shareUrl={window.location.origin+window.location.pathname+toHash({...state,screen:'setup',placeId:selectedPlace.id,category:undefined})}/>:state.placeId?<section className="place-empty"><h1 id="place-heading" tabIndex={-1}>{placeData.loading?'正在載入地點':'這個地點目前無法開啟'}</h1><p>地點連結可能已變更，或資料快照尚未載入。可重新搜尋或返回路線。</p><CatalogStatus loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/><button className="button secondary wide" onClick={clearDiscovery}>返回路線規劃</button></section>:<PlaceList key={state.category??placeQuery} catalog={catalog} results={foundPlaces} title={placeQuery.trim()?'搜尋結果':state.category?`附近${categoryLabels[state.category]}`:'校園地點'} onChoose={choosePlace} onBack={clearDiscovery} loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/>)}
+          <div className="route-panel-content" hidden={discovering}>
           {mobile && explorer}
           {state.screen === 'setup' && <>
             <h1 id="panel-heading" tabIndex={-1}>規劃校園路線</h1><p className="panel-intro">選擇起終點，再比較沿途的通行條件。</p>
@@ -239,14 +281,15 @@ export default function App() {
             {selected.kind === 'survey' && <p className="verification-age">全程最舊查核日期 {formatDate(oldestVerification(selected))}，距今 {daysSince(oldestVerification(selected)!)} 天。</p>}
             <div className="sticky-panel-actions"><button className="button primary wide" onClick={copyLink}><Copy size={18} />複製路線連結</button><div className="confirm-extra-actions"><button className="button secondary" onClick={saveFavorite}><Bookmark size={17} />收藏這條路線</button><button className="button secondary" onClick={() => window.print()}><Printer size={17} />列印路線</button></div>{favoriteMessage && <p className="copy-feedback" role="status">{favoriteMessage}</p>}{copyMessage && <p className="copy-feedback" role="status"><CheckCircle2 size={15} />{copyMessage}</p>}{copyFallback && <input className="copy-fallback" aria-label="路線連結" readOnly value={`${window.location.origin}${window.location.pathname}${toHash({ ...state, routeId: selected.id })}`} onFocus={e => e.target.select()} />}<p className="form-footnote">出發前請確認入口與現場路況。</p></div>
           </>}
-        </div>
-        {state.screen === 'setup' && <div className="setup-actions"><button type="submit" form="route-planner" className="button primary wide search-button">比較路線<ArrowRight size={19} aria-hidden="true" /></button><p className="form-footnote">{isDemo ? '示範動線的路況數值皆為模擬。' : '未查核路段不列入候選路線。'}</p></div>}
+        </div></div>
+        {!discovering && state.screen === 'setup' && <div className="setup-actions"><button type="submit" form="route-planner" className="button primary wide search-button">比較路線<ArrowRight size={19} aria-hidden="true" /></button><p className="form-footnote">{isDemo ? '示範動線的路況數值皆為模擬。' : '未查核路段不列入候選路線。'}</p></div>}
       </MapSheet>
-      <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} communityReports={community.reports} communitySegments={communitySegments} onSelectCommunity={openCommunity} onLocationActivity={() => { tour.pause(); tour.setFollowing(false) }} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => navigate({ routeId: id, segmentId: '' })} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
+      {catalog&&<PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces} onQuery={value=>{tour.pause();setPlaceQuery(value);if(state.placeId||state.category)void navigate({placeId:undefined,category:undefined});setSheetSize('half')}} onChoose={choosePlace} onCategory={chooseCategory} onClear={clearDiscovery} onBrowse={()=>{if(!placeQuery.trim()&&!state.category)void navigate({category:'building',placeId:undefined});setSheetSize('full');requestAnimationFrame(()=>document.getElementById('place-heading')?.focus({preventScroll:true}))}} onClearRecent={()=>{if(clearRecentPlaces()){setRecentPlaces([]);setPlaceFeedback('已清除最近查看。')}else setPlaceFeedback('此瀏覽器無法清除儲存紀錄，可從網站設定管理。')}}/>}
+      <CampusMap catalogPlaces={catalog?.places} catalogCategory={state.category} catalogQuery={placeQuery} selectedPlaceId={state.placeId} discoveryActive={discovering} onSelectPlace={id=>{const place=catalog?.places.find(p=>p.id===id);if(place)choosePlace(place)}} onReturnRoutes={clearDiscovery} campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} communityReports={community.reports} communitySegments={communitySegments} onSelectCommunity={openCommunity} onLocationActivity={() => { tour.pause(); tour.setFollowing(false);if(discovering){setPlaceQuery('');void navigate({placeId:undefined,category:undefined})} }} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => {setPlaceQuery('');void navigate({ routeId: id, segmentId: '',placeId:undefined,category:undefined });setSheetSize('half')}} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
       {!mobile && explorer && <div className="experience-dock">{explorer}</div>}
     </main>}
     <OfflineStatus snapshotDate={campus?.retrievedAt} beforeUpdate={async () => { try { await flushSurveyDraft(); return document.documentElement.dataset.surveyUnsaved !== 'true' } catch { return false } }} />
-    {showSources && campus && <SourceDialog campus={campus} onClose={() => setShowSources(false)} />}
+    {showSources && campus && <SourceDialog campus={{...campus,sources:[...campus.sources,...(catalog?.sources.filter(source=>source.id==='osm-amenities')??[])]}} onClose={() => setShowSources(false)} />}
     {campus && <CommunityDialog open={communityOpen} onClose={() => setCommunityOpen(false)} data={community} segments={communitySegments} initialSegment={communitySegment} onInspect={inspectCommunitySegment} onOpenPhoto={tour.pause} />}
     {state.screen === 'confirm' && !resolved.problem && selected && campus && <PrintableRoute route={selected} state={state} snapshotDate={campus.retrievedAt} />}
     <div className="sr-only" aria-live="polite">{state.screen === 'detail' && activeSegment ? `目前路段：${activeSegment.name}` : ''}</div>

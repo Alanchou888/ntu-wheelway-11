@@ -1,4 +1,4 @@
-import type { Campus, Coordinate, Entrance, Mode, NavigationState, Preference, Route, RouteMetrics, Segment } from './types'
+import type { Campus, CatalogCategory, Coordinate, Entrance, Mode, NavigationState, Preference, Route, RouteMetrics, Segment } from './types'
 
 export const placeNames = { library: '總圖書館', boya: '博雅教學館' }
 export const initialState: NavigationState = { screen: 'setup', mode: 'demo', origin: 'library', wheelchair: 'manual', preference: 'gentle', routeId: '', segmentId: '' }
@@ -142,6 +142,8 @@ export function formatDate(value: string | null): string {
 export function toHash(state: NavigationState): string {
   const params = new URLSearchParams({ screen: state.screen, mode: state.mode, from: state.origin, chair: state.wheelchair, prefer: state.preference, route: state.routeId, segment: state.segmentId })
   if (state.limits) for (const [key, n] of Object.entries(state.limits)) if (n !== null) params.set(key, String(n))
+  if (state.placeId) params.set('place',state.placeId)
+  if (state.category) params.set('category',state.category)
   return `#${params}`
 }
 export function fromHash(hash: string): NavigationState {
@@ -156,6 +158,8 @@ export function fromHash(hash: string): NavigationState {
     mode: p.get('mode') === 'survey' ? 'survey' : 'demo', origin: p.get('from') === 'boya' ? 'boya' : 'library',
     wheelchair: p.get('chair') === 'electric' ? 'electric' : 'manual', preference: p.get('prefer') === 'short' ? 'short' : 'gentle',
     routeId: (p.get('route') ?? '').slice(0, 120), segmentId: (p.get('segment') ?? '').slice(0, 120),
+    ...(/^[\w/-]{1,120}$/.test(p.get('place')??'')?{placeId:p.get('place')!}:{}),
+    ...(['building','toilet','elevator','water','rest','ramp','landmark'].includes(p.get('category')??'')?{category:p.get('category') as CatalogCategory}:{}),
     ...(Object.values(limits).some(v => v !== null) ? { limits } : {}) }
 }
 

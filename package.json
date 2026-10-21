@@ -1,7 +1,7 @@
 {
   "name": "ntu-wheelway",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -10,6 +10,7 @@
     "preview": "node scripts/dev-community.mjs",
     "test": "vitest run",
     "data:refresh": "node scripts/refresh-data.mjs",
+    "places:refresh": "node scripts/refresh-places.mjs",
     "survey:template": "node scripts/create-survey-template.mjs",
     "survey:check": "tsx scripts/review-survey.ts",
     "dev:api": "node scripts/dev-community.mjs",

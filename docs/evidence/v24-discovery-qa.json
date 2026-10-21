@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-21",
+  "automatedTests": 165,
+  "environment": "Cua browser checks on local development and production build. Local community entries are explicitly labeled development fixtures. No GPS access or actual field survey.",
+  "browserChecks": [
+    {
+      "case": "keyboard search opens the selected building card",
+      "pass": true
+    },
+    {
+      "case": "from place sets origin and swaps the fixed destination",
+      "pass": true
+    },
+    {
+      "case": "ramp category lists 18 public points",
+      "pass": true
+    },
+    {
+      "case": "unconnected public point disables directions and discloses missing verification",
+      "pass": true
+    },
+    {
+      "case": "empty facility category explains missing data and keeps return controls",
+      "pass": true
+    },
+    {
+      "case": "mobile layer popover appears above the sheet",
+      "pass": true
+    },
+    {
+      "case": "place share action confirms the copied link",
+      "pass": true
+    },
+    {
+      "case": "place link survives reload",
+      "pass": true
+    },
+    {
+      "case": "375px layout has no horizontal overflow and primary targets are at least 44px",
+      "pass": true
+    },
+    {
+      "case": "320px layout keeps primary controls usable without horizontal overflow",
+      "pass": true
+    },
+    {
+      "case": "to place updates destination without using GPS as origin",
+      "pass": true
+    },
+    {
+      "case": "catalog HTTP 503 falls back to working building and ramp data",
+      "pass": true
+    },
+    {
+      "case": "map tile failure keeps the place card and list usable",
+      "pass": true
+    },
+    {
+      "case": "existing setup comparison detail confirmation flow still works",
+      "pass": true
+    },
+    {
+      "case": "returning from confirmation restores two route choices",
+      "pass": true
+    },
+    {
+      "case": "keyboard map marker opens the same place card",
+      "pass": true
+    },
+    {
+      "case": "closing a place returns to route information without reopening suggestions",
+      "pass": true
+    },
+    {
+      "case": "no matches keep an explanatory empty state and Escape closes suggestions",
+      "pass": true
+    },
+    {
+      "case": "recently viewed places can be cleared through the interface",
+      "pass": true
+    },
+    {
+      "case": "place exploration does not promote demonstration routes to verified routes",
+      "pass": true
+    }
+  ],
+  "data": {
+    "places": 88,
+    "buildings": 65,
+    "landmarks": 5,
+    "ramps": 18,
+    "amenitiesAcquisition": "unavailable; no fabricated facilities"
+  },
+  "failureTest": "Dedicated loopback server returns HTTP 503 for places.json and blocks external map tiles with CSP. Existing campus data remains usable.",
+  "screenshots": [
+    "v24-mobile-place.png",
+    "v24-data-failure.png"
+  ]
+}

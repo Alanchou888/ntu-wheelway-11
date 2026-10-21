@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {createPortal} from 'react-dom'
 import L from 'leaflet'
 import { Layers3, MapPin, Scan, X, CloudOff } from 'lucide-react'
-import type { Campus, Coordinate, Mode, Route, Screen } from './types'
+import type { Campus, CatalogCategory, CatalogPlace, Coordinate, Mode, Route, Screen } from './types'
 import { bottlenecks, lineMidpoint, routeCoordinates } from './routes'
 import { reportState } from './community-model'
 import type { CommunityReport, CommunitySegment } from './community-model'
@@ -9,6 +10,7 @@ import { isLiveLocation, withinLocationCoverage } from './device-location'
 import type { DeviceLocationSession } from './device-location'
 import { useDeviceLocation } from './useDeviceLocation'
 import LocationControls from './LocationControls'
+import {categoryLabels,findPlaces} from './places'
 
 interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
@@ -18,6 +20,8 @@ interface Props {
   preview?: { coordinate: Coordinate; following: boolean; reducedMotion: boolean; playing?: boolean }
   communityReports?: CommunityReport[]; communitySegments?: CommunitySegment[]; onSelectCommunity?: (segmentId:string)=>void
   onLocationActivity?:()=>void; locationSession?:DeviceLocationSession
+  catalogPlaces?:CatalogPlace[];catalogCategory?:CatalogCategory;catalogQuery?:string;selectedPlaceId?:string;discoveryActive?:boolean
+  onSelectPlace?:(id:string)=>void;onReturnRoutes?:()=>void
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
 export const colors = { gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
@@ -31,6 +35,8 @@ export default function CampusMap(props: Props) {
   const routesRef = useRef<L.LayerGroup | null>(null)
   const facilitiesRef = useRef<L.LayerGroup | null>(null)
   const communityRef = useRef<L.LayerGroup | null>(null)
+  const placesRef=useRef<L.LayerGroup|null>(null)
+  const buildingClicksRef=useRef<L.LayerGroup|null>(null)
   const wmsRef = useRef<L.TileLayer.WMS | null>(null)
   const previewRef = useRef<L.Marker | null>(null)
   const ownMarkerRef=useRef<L.Marker|null>(null)
@@ -44,6 +50,9 @@ export default function CampusMap(props: Props) {
   const [showCommunity, setShowCommunity] = useState(true)
   const [baseError, setBaseError] = useState(false)
   const [campusError, setCampusError] = useState(false)
+  const [zoom,setZoom]=useState(17)
+  const [viewRevision,setViewRevision]=useState(0)
+  const catalogMatches=useMemo(()=>props.catalogPlaces?findPlaces(props.catalogPlaces,props.catalogQuery,props.catalogCategory):[],[props.catalogPlaces,props.catalogQuery,props.catalogCategory])
   const geometryKey = JSON.stringify(props.routes.map(routeCoordinates))
 
   const visiblePadding = () => {
@@ -55,7 +64,7 @@ export default function CampusMap(props: Props) {
     const left = sheet && !mobile ? Math.max(24, sheet.right - rect.left + 24) : 24
     const bottom = sheet && mobile ? rect.bottom - sheet.top + 16 : dock ? rect.bottom - dock.top + 24 : 66
     const right = mobile ? 24 : 76
-    const top = mobile && ['detail', 'confirm'].includes(actions.current.screen) ? 62 : 76
+    const top = mobile&&actions.current.catalogPlaces?128:mobile && ['detail', 'confirm'].includes(actions.current.screen) ? 62 : 76
     return { topLeft: [left, top] as L.PointTuple, bottomRight: [right, bottom] as L.PointTuple,
       usable: rect.width - left - right > 120 && rect.height - bottom - top > 65 }
   }
@@ -68,9 +77,22 @@ export default function CampusMap(props: Props) {
     if(padding.usable)map.panInside(latlng(current.fix.coordinate),{paddingTopLeft:padding.topLeft,paddingBottomRight:padding.bottomRight,animate:false})
   }
 
-  const refit = (respectLocation=true) => {
+  const focusPlace=()=>{
+    const map=mapRef.current,current=actions.current
+    if(!map||!current.discoveryActive||!current.catalogPlaces)return false
+    const place=current.catalogPlaces.find(p=>p.id===current.selectedPlaceId)
+    const points=place?[place]:findPlaces(current.catalogPlaces,current.catalogQuery,current.catalogCategory)
+    if(!points.length)return false
+    const padding=visiblePadding()
+    if(!padding.usable)return false
+    if(place){map.setZoom(18,{animate:false});map.panInside(latlng(place.coordinate),{paddingTopLeft:padding.topLeft,paddingBottomRight:padding.bottomRight,animate:false})}
+    else map.fitBounds(L.latLngBounds(points.map(p=>latlng(p.coordinate))),{paddingTopLeft:padding.topLeft,paddingBottomRight:padding.bottomRight,maxZoom:18,animate:false})
+    return true
+  }
+  const refit = (respectLocation=true,respectDiscovery=true) => {
     const map = mapRef.current
     if (!map) return
+    if(respectDiscovery&&focusPlace())return
     const own=locationActions.current.state
     if(respectLocation&&own.following&&isLiveLocation(own)&&!actions.current.preview?.following&&!actions.current.preview?.playing){focusMyLocation();return}
     const current = actions.current
@@ -85,6 +107,8 @@ export default function CampusMap(props: Props) {
     if (!rootRef.current) return
     const map = L.map(rootRef.current, { zoomControl: false, minZoom: 15, maxZoom: 20, scrollWheelZoom: true, attributionControl: true }).setView([25.0182, 121.5386], 17)
     mapRef.current = map
+    map.on('zoomend',()=>setZoom(map.getZoom()))
+    map.on('moveend',()=>setViewRevision(value=>value+1))
     map.on('dragstart', () => {locationActions.current.session.setFollowing(false);actions.current.onMapDrag?.()})
     map.on('click', (event: L.LeafletMouseEvent) => {
       if (actions.current.pickingEntrance) actions.current.onPickEntrance?.([event.latlng.lng, event.latlng.lat])
@@ -120,9 +144,11 @@ export default function CampusMap(props: Props) {
     routesRef.current = L.layerGroup().addTo(map)
     facilitiesRef.current = L.layerGroup().addTo(map)
     communityRef.current = L.layerGroup().addTo(map)
+    placesRef.current=L.layerGroup().addTo(map)
+    buildingClicksRef.current=L.layerGroup().addTo(map)
     const observer = new ResizeObserver(() => { map.invalidateSize({ pan: false }); refit() })
     observer.observe(rootRef.current)
-    return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null; previewRef.current = null; ownMarkerRef.current=null;accuracyRef.current=null;ownFocusRef.current=0 }
+    return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null; previewRef.current = null; ownMarkerRef.current=null;accuracyRef.current=null;ownFocusRef.current=0;placesRef.current=null;buildingClicksRef.current=null }
   }, [props.campus])
 
   useEffect(() => {
@@ -136,6 +162,7 @@ export default function CampusMap(props: Props) {
     const group = routesRef.current
     if (!group) return
     group.clearLayers()
+    if(props.discoveryActive)return
     const focus = props.screen === 'detail' || props.screen === 'confirm'
     const selected = props.routes.find(r => r.id === props.selectedId) ?? props.routes[0]
     props.routes.forEach(route => {
@@ -193,13 +220,13 @@ export default function CampusMap(props: Props) {
         L.circleMarker(latlng(place.coordinate), { radius: 7, color: '#fff', weight: 2, fillColor: '#6d8277', fillOpacity: 1 }).bindTooltip(label, { permanent: true, direction: 'top', className: 'entrance-label' }).addTo(group)
       })
     }
-  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus])
+  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus,props.discoveryActive])
 
   useEffect(() => {
     const group = facilitiesRef.current
     if (!group) return
     group.clearLayers()
-    if (showRamps) props.campus.facilities.forEach(facility => {
+    if (showRamps&&!props.catalogPlaces) props.campus.facilities.forEach(facility => {
       const content = document.createElement('div')
       const title = document.createElement('strong')
       title.textContent = facility.name
@@ -208,7 +235,56 @@ export default function CampusMap(props: Props) {
       content.append(title, body)
       L.circleMarker(latlng(facility.coordinate), { radius: 6, color: '#fff', weight: 2, fillColor: '#c38a39', fillOpacity: .9 }).bindPopup(content).addTo(group)
     })
-  }, [showRamps, props.campus])
+  }, [showRamps, props.campus,props.catalogPlaces])
+
+  useEffect(()=>{
+    const group=buildingClicksRef.current
+    if(!group)return
+    group.clearLayers()
+    if(!props.catalogPlaces||!props.campus.context)return
+    const placeFor=(feature:GeoJSON.Feature)=>props.catalogPlaces?.find(p=>p.contextId===String(feature.id)||p.routePlaceId&&(p.name===feature.properties?.name||p.aliases.includes(feature.properties?.name)))
+    L.geoJSON(props.campus.context,{
+      filter:feature=>!!placeFor(feature),
+      style:{stroke:false,fillColor:'#205db6',fillOpacity:.015},
+      onEachFeature:(feature,layer)=>{
+        const place=placeFor(feature)
+        if(place)layer.on('click',(event:L.LeafletMouseEvent)=>{L.DomEvent.stopPropagation(event);actions.current.onSelectPlace?.(place.id)})
+      },
+    }).addTo(group)
+  },[props.catalogPlaces,props.campus])
+
+  useEffect(()=>{
+    const group=placesRef.current
+    if(!group)return
+    group.clearLayers()
+    if(!props.catalogPlaces)return
+    const selected=props.catalogPlaces.find(p=>p.id===props.selectedPlaceId)
+    if(selected){
+      const feature=props.campus.context?.features.find(f=>selected.contextId===String(f.id)||selected.routePlaceId&&(selected.name===f.properties?.name||selected.aliases.includes(f.properties?.name)))
+      if(feature)L.geoJSON(feature,{interactive:false,style:{color:'#205db6',weight:2,fillColor:'#5798e2',fillOpacity:.17}}).addTo(group)
+    }
+    const filtered=!!props.catalogCategory||!!props.catalogQuery?.trim()
+    const bounds=mapRef.current?.getBounds().pad(.05)
+    const shown=props.catalogPlaces.filter(p=>p.id===props.selectedPlaceId||(bounds?.contains(latlng(p.coordinate))&&(filtered?catalogMatches.some(match=>match.id===p.id):!!p.routePlaceId||showRamps&&p.category==='ramp'||zoom>=18&&['building','landmark'].includes(p.category))))
+    for(const place of shown){
+      const active=place.id===props.selectedPlaceId
+      const element=document.createElement('span');element.textContent=({building:'館',toilet:'廁',elevator:'梯',water:'水',rest:'休',ramp:'坡',landmark:'景'} as const)[place.category]
+      const icon=L.divIcon({className:`catalog-map-marker ${active?'selected':''}`,html:element,iconSize:[44,44],iconAnchor:[22,22]})
+      const label=document.createElement('span');label.textContent=place.name
+      const marker=L.marker(latlng(place.coordinate),{icon,keyboard:true,title:place.name,zIndexOffset:active?850:100,bubblingMouseEvents:false}).bindTooltip(label,{permanent:active,direction:'top',offset:[0,-18],className:'catalog-place-label'}).addTo(group)
+      marker.on('click',()=>actions.current.onSelectPlace?.(place.id))
+      const target=marker.getElement()
+      target?.setAttribute('aria-label',`開啟地點：${place.name}，${categoryLabels[place.category]}`)
+      if(target)L.DomEvent.on(target,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key==='Enter'||key===' '){L.DomEvent.preventDefault(event);actions.current.onSelectPlace?.(place.id)}})
+    }
+  },[props.catalogPlaces,props.catalogCategory,props.catalogQuery,props.selectedPlaceId,props.campus,catalogMatches,showRamps,zoom,viewRevision])
+
+  useEffect(()=>{
+    if(!props.discoveryActive)return
+    device.session.setFollowing(false)
+    const timer=window.setTimeout(focusPlace,props.selectedPlaceId?0:200)
+    return()=>clearTimeout(timer)
+  },[props.selectedPlaceId,props.catalogCategory,props.catalogQuery,props.catalogPlaces,props.discoveryActive,props.layoutKey,device.session])
 
   useEffect(()=>{
     const group=communityRef.current
@@ -284,16 +360,16 @@ export default function CampusMap(props: Props) {
     <div className="map-title-pill"><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖書館與博雅教學館</span></div>
     <div className="map-actions">
       <button className={`map-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖層" aria-expanded={layersOpen} title="地圖圖層"><Layers3 size={20} /></button>
-      <button className="map-tool" onClick={()=>{device.session.setFollowing(false);refit(false)}} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} /></button>
+      <button className="map-tool" onClick={()=>{device.session.setFollowing(false);if(props.discoveryActive)props.onReturnRoutes?.();refit(false,false)}} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} /></button>
       {props.screen!=='editor'&&<LocationControls state={device.state} session={device.session} inCoverage={!device.state.fix||withinLocationCoverage(device.state.fix,props.campus.paths.flatMap(path=>path.coordinates))} onActivity={()=>actions.current.onLocationActivity?.()}/>}
     </div>
-    {layersOpen && <div className="layer-popover">
+    {layersOpen && createPortal(<div className="layer-popover">
       <div className="layer-title">地圖圖層<button className="icon-button" onClick={() => setLayersOpen(false)} aria-label="關閉圖層選單"><X size={17} /></button></div>
       <label><input type="checkbox" checked={showCampus} onChange={e => setShowCampus(e.target.checked)} /><span>臺大校園建物與道路</span></label>
       <label><input type="checkbox" checked={showRamps} onChange={e => setShowRamps(e.target.checked)} /><span>公開斜坡道 <small>{props.campus.facilities.length} 個</small></span></label>
       <label><input type="checkbox" checked={showCommunity} onChange={e=>setShowCommunity(e.target.checked)}/><span>社群路況 <small>{props.communityReports?.length??0} 則</small></span></label>
       <p>公開點位尚未實地查核。</p>
-    </div>}
+    </div>,rootRef.current?.closest('.route-workspace')??document.body)}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
     <div className="map-legend">
       {props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />較平緩</span><span><i className="legend-line direct" />距離較短</span></> : <span><MapPin size={15} />已查核動線</span>}

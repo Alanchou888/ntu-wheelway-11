@@ -1,6 +1,15 @@
 import type { FeatureCollection } from 'geojson'
 
 export type Coordinate = [number, number]
+export type CatalogCategory = 'building' | 'toilet' | 'elevator' | 'water' | 'rest' | 'ramp' | 'landmark'
+export interface CatalogPlace {
+  id: string; name: string; aliases: string[]; category: CatalogCategory; coordinate: Coordinate
+  sourceId: string; sourceUrl: string; retrievedAt: string; verifiedAt: null
+  address: string | null; openingHours: string | null; wheelchair: string | null; level: string | null; indoor: string | null
+  widthM: number | null; slopePercent: number | null; photos: Photo[]; note: string
+  routePlaceId: PlaceId | null; contextId: string | null
+}
+export interface PlaceCatalog { version: 1; bbox: number[]; sources: PublicSource[]; places: CatalogPlace[]; amenitiesStatus?: 'unavailable' | 'ok' | 'cached' }
 export type PlaceId = 'library' | 'boya'
 export type Verification = 'demo' | 'unverified' | 'verified' | 'blocked'
 export type Mode = 'demo' | 'survey'
@@ -28,4 +37,4 @@ export interface Route {
 export interface SurveyData { version: number; routes: Route[] }
 export interface RouteMetrics { distanceM: number; maxSlopePercent: number | null; minWidthM: number | null; maxStepCm: number | null; surfaces: string[] }
 export interface RouteLimits { maxSlope: number | null; minWidth: number | null; maxStep: number | null; recheckDays: number | null }
-export interface NavigationState { screen: Screen; mode: Mode; origin: PlaceId; wheelchair: Wheelchair; preference: Preference; routeId: string; segmentId: string; limits?: RouteLimits }
+export interface NavigationState { screen: Screen; mode: Mode; origin: PlaceId; wheelchair: Wheelchair; preference: Preference; routeId: string; segmentId: string; limits?: RouteLimits; placeId?: string; category?: CatalogCategory }
