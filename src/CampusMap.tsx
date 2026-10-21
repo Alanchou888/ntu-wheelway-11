@@ -265,7 +265,7 @@ export default function CampusMap(props: Props) {
     }
     const filtered=!!props.catalogCategory||!!props.catalogQuery?.trim()
     const bounds=mapRef.current?.getBounds().pad(.05)
-    const shown=props.catalogPlaces.filter(p=>p.id===props.selectedPlaceId||(bounds?.contains(latlng(p.coordinate))&&(filtered?catalogMatches.some(match=>match.id===p.id):!!p.routePlaceId||showRamps&&p.category==='ramp'||zoom>=18&&['building','landmark'].includes(p.category))))
+    const shown=props.catalogPlaces.filter(p=>p.id===props.selectedPlaceId||(bounds?.contains(latlng(p.coordinate))&&(filtered?catalogMatches.some(match=>match.id===p.id):!!p.routePlaceId||showRamps&&p.category==='ramp'||zoom>=17&&p.category==='landmark'||zoom>=19&&p.category==='building')))
     for(const place of shown){
       const active=place.id===props.selectedPlaceId
       const element=document.createElement('span');element.textContent=({building:'館',toilet:'廁',elevator:'梯',water:'水',rest:'休',ramp:'坡',landmark:'景'} as const)[place.category]

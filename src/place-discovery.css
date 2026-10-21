@@ -95,7 +95,8 @@
 .catalog-map-marker{display:flex;align-items:center;justify-content:center;background:none;border:0;pointer-events:auto}
 .catalog-map-marker>span{display:grid;place-items:center;width:27px;height:30px;box-sizing:border-box;background:#f8fbfe;border:1px solid #8298ab;color:#3c5b78;border-radius:12px 12px 12px 3px;box-shadow:0 2px 5px #163e5426;font-size:12px;font-weight:600}
 .catalog-map-marker.selected>span{width:35px;height:38px;color:#fff;background:#205db6;border:2px solid #fff;box-shadow:0 0 0 2px #205db6,0 2px 6px #163e5440}
-.catalog-place-label{box-shadow:none;color:#36516b;border-color:#bccbd8;font-size:11px;padding:4px 7px;border-radius:5px;white-space:normal;max-width:190px}
+.catalog-place-label{box-shadow:none;color:#36516b;border-color:#bccbd8;font-size:11px;padding:4px 7px;border-radius:5px;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.route-workspace[data-discovering='true'] .map-legend{display:none}
 .route-workspace>.layer-popover{z-index:950}
 @media(max-width:760px),(max-height:540px) and (max-width:1000px){
   .app.map-experience .product-nav{grid-template-columns:repeat(5,minmax(0,1fr))}

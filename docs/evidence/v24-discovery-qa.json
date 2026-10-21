@@ -82,6 +82,14 @@
     {
       "case": "place exploration does not promote demonstration routes to verified routes",
       "pass": true
+    },
+    {
+      "case": "selected place label stays on one readable line",
+      "pass": true
+    },
+    {
+      "case": "normal browsing limits default markers while keeping the selected place",
+      "pass": true
     }
   ],
   "data": {
