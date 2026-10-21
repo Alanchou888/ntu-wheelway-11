@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-21",
+  "environment": "local development with explicitly labelled test reports",
+  "checks": [
+    {
+      "case": "shared reports and stale state",
+      "pass": true
+    },
+    {
+      "case": "another account confirmation",
+      "pass": true
+    },
+    {
+      "case": "mobile 375px controls and no horizontal overflow",
+      "pass": true
+    },
+    {
+      "case": "mobile photo expansion",
+      "pass": true
+    },
+    {
+      "case": "API failure retains last loaded reports",
+      "pass": true
+    },
+    {
+      "case": "photo Escape closes only photo and restores focus",
+      "pass": true
+    },
+    {
+      "case": "Enter opens grouped map marker",
+      "pass": true
+    },
+    {
+      "case": "320px layout and primary targets",
+      "pass": true
+    },
+    {
+      "case": "closing dialog preserves unsubmitted form",
+      "pass": true
+    },
+    {
+      "case": "320px report publishes and collapses form",
+      "pass": true
+    },
+    {
+      "case": "community does not promote verified routes",
+      "pass": true
+    },
+    {
+      "case": "inspect outside candidates preserves survey mode",
+      "pass": true
+    },
+    {
+      "case": "route detail retains preview and embeds community reports",
+      "pass": true
+    },
+    {
+      "case": "landscape layout",
+      "pass": true
+    }
+  ]
+}

@@ -13,3 +13,5 @@ private/
 *.pem
 *.key
 *.pfx
+.dev.vars*
+.wrangler/

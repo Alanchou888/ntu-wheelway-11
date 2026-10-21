@@ -8,8 +8,9 @@ Public GitHub repo：https://github.com/Alanchou888/ntu-wheelway-11
 
 ## 目前開發狀態
 
-此 repository 包含 v2.1 校園試用版的程式碼。公開測試站的部署進度獨立管理，不能由 package 版本推定已上線。前端使用滿版地圖、浮動資訊面板與藍／棕兩種路線標示。
+此 repository 包含 v2.2 校園試用版的程式碼。公開測試站的部署進度獨立管理，不能由 package 版本推定已上線。前端使用滿版地圖、浮動資訊面板與藍／棕兩種路線標示。
 
+- 新增路段社群回報：公開閱讀，登入後可發布文字與照片、確認現況、檢舉與撤回。D1 與 R2 提供跨裝置共用儲存，使用者回報持續與實勘證據分開。詳見 [v2.2 社群路況](docs/v2.2-社群路況.md)。
 - 新增路線預演：沿道路幾何播放、逐段暫停、前後跳段、1×／2×／4× 速度及鍵盤進度操作。手機播放時會收合面板。
 - 新增互動路況時間軸：按路段距離排列坡度與路寬，選段會同步更新地圖、說明與照片。未知值保留，資料不完整時不判定全程極值。
 - 手機可用按鈕、把手拖曳或鍵盤調整面板高度。拖動地圖會解除預演跟隨，背景自動暫停，系統減少動態時保留手動查看。
@@ -48,10 +49,12 @@ v2.0 的 93 項自動測試與 16 項瀏覽器主要流程檢查保留於 [產�
 
 ```powershell
 npm.cmd ci
-npm.cmd run dev
+npm.cmd run build
+npm.cmd run db:local
+npm.cmd run dev:api
 ```
 
-開啟 `http://localhost:5173`。正式靜態建置與預覽：
+開啟 `http://127.0.0.1:8787/` 查看正式建置與本機 API。前端開發可另開終端執行 `npm.cmd run dev -- --host 127.0.0.1`，開啟 `http://127.0.0.1:5173/`，可使用本機模擬登入。檢查與重新建置：
 
 ```powershell
 npm.cmd test
@@ -60,7 +63,7 @@ npm.cmd run build
 npm.cmd run preview
 ```
 
-靜態輸出位於 `dist/`。網址以 hash 保存畫面、起終點、輪椅類型、偏好及路線，可直接分享與重新開啟。
+網站包含 `dist/client` 前端、`dist/server` Worker 與 `dist/.openai` 發布資訊。社群功能需要 Sites 的 D1 與 R2，相關設定見 v2.2 文件。網址以 hash 保存畫面、起終點、輪椅類型、偏好及路線，可直接分享與重新開啟。
 
 ## 初版資料
 
@@ -79,7 +82,7 @@ npm.cmd run preview
 
 ## 技術與 AI 使用紀錄
 
-使用 React、TypeScript、Vite、Leaflet 與 Lucide。草稿以瀏覽器 IndexedDB 儲存，無須登入、雲端資料庫或付費 API key。
+使用 React、TypeScript、Vite、Leaflet 與 Lucide，社群服務使用 Cloudflare Workers、D1 與 R2。瀏覽路線與公開回報無需登入，發布與確認使用 ChatGPT 登入，無需自行提供付費地圖 API key。實勘草稿仍以瀏覽器 IndexedDB 儲存。
 
 本版由 AI 協助實作介面、公開資料處理及程式驗證。保留提案的四步流程，使用滿版地圖、浮動面板與出發前路線預演。未有實勘照片的區塊保留缺圖提示。示範模式與查核模式分開，避免將模擬數值誤認為通行證據。這些實作選擇仍待真實使用者測試與團隊迭代。
 

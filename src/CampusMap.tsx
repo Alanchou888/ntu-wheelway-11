@@ -3,6 +3,8 @@ import L from 'leaflet'
 import { Layers3, MapPin, Scan, X, CloudOff } from 'lucide-react'
 import type { Campus, Coordinate, Mode, Route, Screen } from './types'
 import { bottlenecks, lineMidpoint, routeCoordinates } from './routes'
+import { reportState } from './community-model'
+import type { CommunityReport, CommunitySegment } from './community-model'
 
 interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
@@ -10,6 +12,7 @@ interface Props {
   pickingEntrance?: boolean; onPickEntrance?: (coordinate: Coordinate) => void
   layoutKey?: string; onMapDrag?: () => void
   preview?: { coordinate: Coordinate; following: boolean; reducedMotion: boolean }
+  communityReports?: CommunityReport[]; communitySegments?: CommunitySegment[]; onSelectCommunity?: (segmentId:string)=>void
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
 export const colors = { gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
@@ -19,6 +22,7 @@ export default function CampusMap(props: Props) {
   const mapRef = useRef<L.Map | null>(null)
   const routesRef = useRef<L.LayerGroup | null>(null)
   const facilitiesRef = useRef<L.LayerGroup | null>(null)
+  const communityRef = useRef<L.LayerGroup | null>(null)
   const wmsRef = useRef<L.TileLayer.WMS | null>(null)
   const previewRef = useRef<L.Marker | null>(null)
   const actions = useRef(props)
@@ -26,6 +30,7 @@ export default function CampusMap(props: Props) {
   const [layersOpen, setLayersOpen] = useState(false)
   const [showCampus, setShowCampus] = useState(true)
   const [showRamps, setShowRamps] = useState(false)
+  const [showCommunity, setShowCommunity] = useState(true)
   const [baseError, setBaseError] = useState(false)
   const [campusError, setCampusError] = useState(false)
   const geometryKey = JSON.stringify(props.routes.map(routeCoordinates))
@@ -93,6 +98,7 @@ export default function CampusMap(props: Props) {
     wmsRef.current.on('tileerror', () => setCampusError(true))
     routesRef.current = L.layerGroup().addTo(map)
     facilitiesRef.current = L.layerGroup().addTo(map)
+    communityRef.current = L.layerGroup().addTo(map)
     const observer = new ResizeObserver(() => { map.invalidateSize({ pan: false }); refit() })
     observer.observe(rootRef.current)
     return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null; previewRef.current = null }
@@ -183,6 +189,26 @@ export default function CampusMap(props: Props) {
     })
   }, [showRamps, props.campus])
 
+  useEffect(()=>{
+    const group=communityRef.current
+    if(!group)return
+    group.clearLayers()
+    if(!showCommunity)return
+    for(const segment of props.communitySegments??[]){
+      const reports=(props.communityReports??[]).filter(r=>r.segmentId===segment.id)
+      if(!reports.length)continue
+      const active=reports.filter(r=>reportState(r).kind==='active')
+      const blocked=active.some(r=>r.impact==='blocked')
+      const title=`${segment.name}：${reports.length} 則社群路況，${active.length} 則近期回報，點選查看。標記代表整段道路。`
+      const icon=L.divIcon({className:`community-map-marker ${blocked?'blocked':!active.length?'stale':''}`,html:`<span>${reports.length}</span>`,iconSize:[44,44],iconAnchor:[-10,44]})
+      const label=document.createElement('span');label.textContent=title
+      const marker=L.marker(latlng(segment.coordinate),{icon,title,keyboard:true,zIndexOffset:350,bubblingMouseEvents:false}).bindTooltip(label).addTo(group)
+      marker.on('click',()=>actions.current.onSelectCommunity?.(segment.id))
+      const element=marker.getElement()
+      if(element){element.setAttribute('aria-label',title);element.setAttribute('role','button');L.DomEvent.on(element,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key===' '||key==='Enter'){L.DomEvent.stop(event);actions.current.onSelectCommunity?.(segment.id)}})}
+    }
+  },[props.communityReports,props.communitySegments,showCommunity,props.campus])
+
   useEffect(() => { refit() }, [geometryKey, props.campus]) // Editing a measurement must not reset the map viewport.
 
   useEffect(() => {
@@ -216,6 +242,7 @@ export default function CampusMap(props: Props) {
       <div className="layer-title">地圖圖層<button className="icon-button" onClick={() => setLayersOpen(false)} aria-label="關閉圖層選單"><X size={17} /></button></div>
       <label><input type="checkbox" checked={showCampus} onChange={e => setShowCampus(e.target.checked)} /><span>臺大校園建物與道路</span></label>
       <label><input type="checkbox" checked={showRamps} onChange={e => setShowRamps(e.target.checked)} /><span>公開斜坡道 <small>{props.campus.facilities.length} 個</small></span></label>
+      <label><input type="checkbox" checked={showCommunity} onChange={e=>setShowCommunity(e.target.checked)}/><span>社群路況 <small>{props.communityReports?.length??0} 則</small></span></label>
       <p>公開點位尚未實地查核。</p>
     </div>}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}

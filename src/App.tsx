@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Accessibility, ArrowDownUp, ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Copy, Footprints, Info, LoaderCircle, Mountain, Printer, Route as RouteIcon, ShieldCheck, SlidersHorizontal, TriangleAlert, X, Zap } from 'lucide-react'
+import { Accessibility, ArrowDownUp, ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Copy, Footprints, Info, LoaderCircle, MessageSquare, Mountain, Printer, Route as RouteIcon, ShieldCheck, SlidersHorizontal, TriangleAlert, X, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CampusMap from './CampusMap'
 import type { Campus, Entrance, Mode, NavigationState, Route, Screen, Segment } from './types'
-import { buildDemoRoutes, formatDate, formatDistance, fromHash, lineDistance, metrics, placeNames, reverseRoute, segmentLabel, toHash } from './routes'
+import { buildDemoRoutes, formatDate, formatDistance, fromHash, lineDistance, lineMidpoint, metrics, placeNames, reverseRoute, segmentLabel, toHash } from './routes'
 import { BottleneckList, ComparisonSummary } from './RouteInsights'
 import { daysSince, emptyLimits, favoriteFor, flushSurveyDraft, oldestVerification, readFavorites, readInitialNavigation, resolveSharedRoute, savePreferences, selectCandidates, writeFavorites } from './product'
 import type { Favorite } from './product'
@@ -16,6 +16,9 @@ import MapSheet from './MapSheet'
 import type { SheetSize } from './MapSheet'
 import RouteExplorer from './RouteExplorer'
 import { useMediaQuery, useRouteTour } from './useRouteTour'
+import { CommunityDialog, CommunitySection } from './Community'
+import { useCommunity } from './useCommunity'
+import { communitySummary } from './community-model'
 import './product.css'
 import './campus-design.css'
 import './route-experience.css'
@@ -89,6 +92,9 @@ export default function App() {
   const [undoFavorites, setUndoFavorites] = useState<Favorite[] | null>(null)
   const [profileFeedback, setProfileFeedback] = useState('')
   const [sheetSize, setSheetSize] = useState<SheetSize>('half')
+  const [communityOpen, setCommunityOpen] = useState(false)
+  const [communitySegment, setCommunitySegment] = useState('')
+  const community = useCommunity(!!campus)
   const mobile = useMediaQuery('(max-width: 760px), (max-height: 540px) and (max-width: 1000px)')
   const panelRef = useRef<HTMLElement>(null)
 
@@ -119,6 +125,7 @@ export default function App() {
     if ('wheelchair' in patch || 'preference' in patch || 'limits' in patch) setProfileFeedback('')
   }
   const allRoutes = useMemo(() => campus ? [...buildDemoRoutes(campus), ...survey.routes] : [], [campus, survey])
+  const communitySegments = useMemo(() => allRoutes.flatMap(route => route.segments.map(segment => ({ id: segment.id, name: segment.name, routeName: route.name, coordinate: lineMidpoint(segment.coordinates) }))), [allRoutes])
   const candidates = useMemo(() => selectCandidates(allRoutes, state), [allRoutes, state.mode, state.preference, state.limits])
   const routes = useMemo(() => candidates.accepted.map(r => state.origin === r.originEntrance.placeId ? r : reverseRoute(r)), [candidates, state.origin])
   const resolved = resolveSharedRoute(routes, state)
@@ -168,12 +175,21 @@ export default function App() {
     }
   }
   const explorer = tourRoute ? <RouteExplorer route={tourRoute} tour={tour} onInspect={inspectTourSegment} onStart={startTour} /> : null
+  const openCommunity = (segmentId = '') => { tour.pause(); setCommunitySegment(segmentId); setCommunityOpen(true) }
+  const inspectCommunitySegment = (id: string) => {
+    const route = routes.find(r => r.segments.some(s => s.id === id))
+    if (!route) return false
+    tour.pause()
+    void navigate({ screen: 'detail', routeId: route.id, segmentId: id })
+    setSheetSize('full')
+    return true
+  }
 
   return <div className={`app ${campus && step >= 0 ? 'map-experience' : ''}`}>
     <a href="#content-panel" className="skip-link" onClick={e => { e.preventDefault(); setSheetSize('full'); requestAnimationFrame(() => document.getElementById('content-panel')?.focus()) }}>跳至操作內容</a>
     <header className="topbar">
       <button className="brand" onClick={() => navigate({ screen: 'setup' })} aria-label="輪行臺大，返回設定"><span className="brand-symbol"><RouteIcon size={27} strokeWidth={2} aria-hidden="true" /></span><span><strong>輪行臺大</strong><small>校園無障礙路線</small></span></button>
-      <nav className="product-nav" aria-label="主要功能">{[{ screen: 'setup' as const, label: '路線規劃', icon: RouteIcon }, { screen: 'saved' as const, label: '我的收藏', icon: Bookmark }, { screen: 'help' as const, label: '使用說明', icon: BookOpen }, { screen: 'editor' as const, label: '實勘編輯', icon: ClipboardCheck }].map(item => <button key={item.screen} className={(item.screen === 'setup' ? step >= 0 : state.screen === item.screen) ? 'active' : ''} aria-current={(item.screen === 'setup' ? step >= 0 : state.screen === item.screen) ? 'page' : undefined} onClick={() => navigate({ screen: item.screen })}><item.icon size={17} aria-hidden="true" /><span>{item.label}</span>{item.screen === 'saved' && favorites.length > 0 && <small>{favorites.length}</small>}</button>)}</nav>
+      <nav className="product-nav" aria-label="主要功能">{[{ screen: 'setup' as const, label: '路線規劃', icon: RouteIcon }, { screen: 'saved' as const, label: '我的收藏', icon: Bookmark }, { screen: 'help' as const, label: '使用說明', icon: BookOpen }, { screen: 'editor' as const, label: '實勘編輯', icon: ClipboardCheck }].map(item => <button key={item.screen} className={(item.screen === 'setup' ? step >= 0 : state.screen === item.screen) ? 'active' : ''} aria-current={(item.screen === 'setup' ? step >= 0 : state.screen === item.screen) ? 'page' : undefined} onClick={() => navigate({ screen: item.screen })}><item.icon size={17} aria-hidden="true" /><span>{item.label}</span>{item.screen === 'saved' && favorites.length > 0 && <small>{favorites.length}</small>}</button>)}<button disabled={!campus} onClick={() => openCommunity()} aria-haspopup="dialog"><MessageSquare size={17} aria-hidden="true"/><span>社群路況</span></button></nav>
       <button className="source-button" onClick={() => setShowSources(true)} disabled={!campus}><Info size={18} aria-hidden="true" /><span>資料來源</span></button>
     </header>
     {step >= 0 && <div className="journey-bar"><nav className="stepper" aria-label="選路流程">{screens.map((item, i) => { const Icon = item.icon; return <button key={item.id} className={`step ${i === step ? 'current' : ''} ${i < step ? 'completed' : ''}`} disabled={i > step} aria-label={`步驟 ${i + 1}：${item.label}`} aria-current={i === step ? 'step' : undefined} onClick={() => navigate({ screen: item.id })}><span className="step-index" aria-hidden="true">{i < step ? <Check size={13} /> : i + 1}</span><Icon size={16} className="step-icon" aria-hidden="true" /><span className="step-label">{item.label}</span>{i < 3 && <ChevronRight size={13} className="step-chevron" aria-hidden="true" />}</button> })}</nav>
@@ -200,7 +216,7 @@ export default function App() {
           {state.screen === 'compare' && routes.length > 0 && (isDemo || !surveyLoading) && <>
             <div className="panel-title-row"><h1 id="panel-heading" tabIndex={-1}>比較路線</h1><button className="back-link" onClick={() => navigate({ screen: 'setup' })}><SlidersHorizontal size={16} aria-hidden="true" />修改條件</button></div><p className="route-pair"><span>{placeNames[state.origin]}</span><ArrowRight size={16} aria-hidden="true" /><span>{placeNames[destination]}</span></p>
             <div className="compare-preference"><span>{routes.length} 條{isDemo ? '示範' : ''}路線</span><span>{state.wheelchair === 'manual' ? '手動輪椅' : '電動輪椅'}</span><span>{state.preference === 'gentle' ? '依坡度排序' : '依距離排序'}</span></div>
-            <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'direct' ? 'direct' : 'gentle'} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Mountain size={20} aria-hidden="true" /> : <RouteIcon size={20} aria-hidden="true" />}</span><div><strong>{route.name}</strong>{route.kind === 'survey' && <span>{route.description}</span>}</div>{i === 0 && <span className="preference-tag">符合偏好</span>}</div><RouteStats route={route} /><div className="route-card-surface"><span>無階梯{isDemo ? '（示範）' : ''}</span><span>{metrics(route).surfaces.join('、')}</span></div>{route.kind === 'survey' && <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>}<div className="route-card-footer"><span>{isDemo ? '示範路況，尚未實勘' : '全程及入口已查核'}</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div></button>)}</div>
+            <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'direct' ? 'direct' : 'gentle'} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Mountain size={20} aria-hidden="true" /> : <RouteIcon size={20} aria-hidden="true" />}</span><div><strong>{route.name}</strong>{route.kind === 'survey' && <span>{route.description}</span>}</div>{i === 0 && <span className="preference-tag">符合偏好</span>}</div><RouteStats route={route} />{(()=>{const summary=communitySummary(community.reports,new Set(route.segments.map(s=>s.id)));return summary.total>0?<p className="community-route-note"><MessageSquare size={14}/><span>社群路況 {summary.total} 則，其中 {summary.recent} 則近期回報{summary.blocked>0?'，含通行受阻回報':''}。查看路段了解現場資訊。</span></p>:null})()}<div className="route-card-surface"><span>無階梯{isDemo ? '（示範）' : ''}</span><span>{metrics(route).surfaces.join('、')}</span></div>{route.kind === 'survey' && <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>}<div className="route-card-footer"><span>{isDemo ? '示範路況，尚未實勘' : '全程及入口已查核'}</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div></button>)}</div>
             <ComparisonSummary routes={routes} />
           </>}
 
@@ -211,6 +227,7 @@ export default function App() {
             <BottleneckList route={selected} onSelect={id => navigate({ segmentId: id })} />
             <div className="segment-tabs" role="group" aria-label="選擇路段">{selected.segments.map((segment, i) => <button key={segment.id} aria-label={`路段 ${i + 1}：${segment.name}`} aria-pressed={activeSegment.id === segment.id} className={activeSegment.id === segment.id ? 'active' : ''} onClick={() => navigate({ segmentId: segment.id })}><span>{i + 1}</span><div><strong>{segment.name}</strong><small>{formatDistance(lineDistance(segment.coordinates))}</small></div><ChevronRight size={15} /></button>)}</div>
             <SegmentInfo segment={activeSegment} onOpenPhoto={tour.pause} />
+            <CommunitySection data={community} segmentId={activeSegment.id} onOpen={() => openCommunity(activeSegment.id)} onOpenPhoto={tour.pause} />
             <div className="sticky-panel-actions"><button className="button primary wide" onClick={() => navigate({ screen: 'confirm', routeId: selected.id })}>選擇這條路線<Check size={18} /></button></div>
           </>}
 
@@ -225,11 +242,12 @@ export default function App() {
         </div>
         {state.screen === 'setup' && <div className="setup-actions"><button type="submit" form="route-planner" className="button primary wide search-button">比較路線<ArrowRight size={19} aria-hidden="true" /></button><p className="form-footnote">{isDemo ? '示範動線的路況數值皆為模擬。' : '未查核路段不列入候選路線。'}</p></div>}
       </MapSheet>
-      <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => navigate({ routeId: id, segmentId: '' })} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
+      <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} communityReports={community.reports} communitySegments={communitySegments} onSelectCommunity={openCommunity} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => navigate({ routeId: id, segmentId: '' })} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
       {!mobile && explorer && <div className="experience-dock">{explorer}</div>}
     </main>}
     <OfflineStatus snapshotDate={campus?.retrievedAt} beforeUpdate={async () => { try { await flushSurveyDraft(); return document.documentElement.dataset.surveyUnsaved !== 'true' } catch { return false } }} />
     {showSources && campus && <SourceDialog campus={campus} onClose={() => setShowSources(false)} />}
+    {campus && <CommunityDialog open={communityOpen} onClose={() => setCommunityOpen(false)} data={community} segments={communitySegments} initialSegment={communitySegment} onInspect={inspectCommunitySegment} onOpenPhoto={tour.pause} />}
     {state.screen === 'confirm' && !resolved.problem && selected && campus && <PrintableRoute route={selected} state={state} snapshotDate={campus.retrievedAt} />}
     <div className="sr-only" aria-live="polite">{state.screen === 'detail' && activeSegment ? `目前路段：${activeSegment.name}` : ''}</div>
   </div>

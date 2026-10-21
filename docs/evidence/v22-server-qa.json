@@ -1,0 +1,18 @@
+[
+  {
+    "case": "flag endpoint",
+    "pass": true
+  },
+  {
+    "case": "protected admin can read flags",
+    "pass": true
+  },
+  {
+    "case": "moderation hidden",
+    "pass": true
+  },
+  {
+    "case": "moderation visible",
+    "pass": true
+  }
+]
