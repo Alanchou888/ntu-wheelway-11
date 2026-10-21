@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-21",
+  "environment": "Development-only fake geolocation provider. No real location or browser location permission requested.",
+  "automatedTests": 148,
+  "browserChecks": [
+    {
+      "case": "no position request on page load",
+      "pass": true
+    },
+    {
+      "case": "opening controls does not start positioning",
+      "pass": true
+    },
+    {
+      "case": "test fix creates location marker and accuracy circle",
+      "pass": true
+    },
+    {
+      "case": "moving fix updates displayed accuracy",
+      "pass": true
+    },
+    {
+      "case": "map following can be paused independently",
+      "pass": true
+    },
+    {
+      "case": "stop removes marker and uncertainty circle",
+      "pass": true
+    },
+    {
+      "case": "low accuracy explains uncertainty",
+      "pass": true
+    },
+    {
+      "case": "375px dialog has no horizontal overflow and main controls at least 44px",
+      "pass": true
+    },
+    {
+      "case": "320px dialog fits viewport and scrolls vertically",
+      "pass": true
+    },
+    {
+      "case": "outside coverage retains campus route scope warning",
+      "pass": true
+    },
+    {
+      "case": "permission denied explains browser settings with manual retry",
+      "pass": true
+    },
+    {
+      "case": "timeout offers explicit manual retry",
+      "pass": true
+    },
+    {
+      "case": "stale fix is labeled and cannot be followed until retry",
+      "pass": true
+    },
+    {
+      "case": "background pause retains labeled last position and requires resume",
+      "pass": true
+    },
+    {
+      "case": "preview keeps a distinct marker and suspends device camera follow",
+      "pass": true
+    },
+    {
+      "case": "following own position removes the simulated preview",
+      "pass": true
+    },
+    {
+      "case": "Escape closes location dialog and restores trigger focus",
+      "pass": true
+    }
+  ],
+  "limitations": [
+    "No real mobile GPS permission or outdoor accuracy test",
+    "Background behavior simulated through the same session pause action"
+  ],
+  "screenshots": [
+    "v23-location-mobile-simulated.png"
+  ]
+}

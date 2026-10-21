@@ -5,19 +5,27 @@ import type { Campus, Coordinate, Mode, Route, Screen } from './types'
 import { bottlenecks, lineMidpoint, routeCoordinates } from './routes'
 import { reportState } from './community-model'
 import type { CommunityReport, CommunitySegment } from './community-model'
+import { isLiveLocation, withinLocationCoverage } from './device-location'
+import type { DeviceLocationSession } from './device-location'
+import { useDeviceLocation } from './useDeviceLocation'
+import LocationControls from './LocationControls'
 
 interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
   onSelectRoute: (id: string) => void; onSelectSegment: (id: string) => void
   pickingEntrance?: boolean; onPickEntrance?: (coordinate: Coordinate) => void
   layoutKey?: string; onMapDrag?: () => void
-  preview?: { coordinate: Coordinate; following: boolean; reducedMotion: boolean }
+  preview?: { coordinate: Coordinate; following: boolean; reducedMotion: boolean; playing?: boolean }
   communityReports?: CommunityReport[]; communitySegments?: CommunitySegment[]; onSelectCommunity?: (segmentId:string)=>void
+  onLocationActivity?:()=>void; locationSession?:DeviceLocationSession
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
 export const colors = { gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
 
 export default function CampusMap(props: Props) {
+  const device = useDeviceLocation(props.locationSession)
+  const locationActions=useRef(device)
+  locationActions.current=device
   const rootRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const routesRef = useRef<L.LayerGroup | null>(null)
@@ -25,6 +33,9 @@ export default function CampusMap(props: Props) {
   const communityRef = useRef<L.LayerGroup | null>(null)
   const wmsRef = useRef<L.TileLayer.WMS | null>(null)
   const previewRef = useRef<L.Marker | null>(null)
+  const ownMarkerRef=useRef<L.Marker|null>(null)
+  const accuracyRef=useRef<L.Circle|null>(null)
+  const ownFocusRef=useRef(0)
   const actions = useRef(props)
   actions.current = props
   const [layersOpen, setLayersOpen] = useState(false)
@@ -49,9 +60,19 @@ export default function CampusMap(props: Props) {
       usable: rect.width - left - right > 120 && rect.height - bottom - top > 65 }
   }
 
-  const refit = () => {
+  const focusMyLocation = (resetZoom=false) => {
+    const map=mapRef.current, current=locationActions.current.state
+    if(!map||!current.fix||!isLiveLocation(current))return
+    const padding=visiblePadding()
+    if(resetZoom)map.setZoom(17,{animate:false})
+    if(padding.usable)map.panInside(latlng(current.fix.coordinate),{paddingTopLeft:padding.topLeft,paddingBottomRight:padding.bottomRight,animate:false})
+  }
+
+  const refit = (respectLocation=true) => {
     const map = mapRef.current
     if (!map) return
+    const own=locationActions.current.state
+    if(respectLocation&&own.following&&isLiveLocation(own)&&!actions.current.preview?.following&&!actions.current.preview?.playing){focusMyLocation();return}
     const current = actions.current
     const points = current.routes.flatMap(routeCoordinates)
     const padding = visiblePadding()
@@ -64,7 +85,7 @@ export default function CampusMap(props: Props) {
     if (!rootRef.current) return
     const map = L.map(rootRef.current, { zoomControl: false, minZoom: 15, maxZoom: 20, scrollWheelZoom: true, attributionControl: true }).setView([25.0182, 121.5386], 17)
     mapRef.current = map
-    map.on('dragstart', () => actions.current.onMapDrag?.())
+    map.on('dragstart', () => {locationActions.current.session.setFollowing(false);actions.current.onMapDrag?.()})
     map.on('click', (event: L.LeafletMouseEvent) => {
       if (actions.current.pickingEntrance) actions.current.onPickEntrance?.([event.latlng.lng, event.latlng.lat])
     })
@@ -101,7 +122,7 @@ export default function CampusMap(props: Props) {
     communityRef.current = L.layerGroup().addTo(map)
     const observer = new ResizeObserver(() => { map.invalidateSize({ pan: false }); refit() })
     observer.observe(rootRef.current)
-    return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null; previewRef.current = null }
+    return () => { observer.disconnect(); map.remove(); mapRef.current = null; routesRef.current = null; facilitiesRef.current = null; wmsRef.current = null; previewRef.current = null; ownMarkerRef.current=null;accuracyRef.current=null;ownFocusRef.current=0 }
   }, [props.campus])
 
   useEffect(() => {
@@ -212,7 +233,7 @@ export default function CampusMap(props: Props) {
   useEffect(() => { refit() }, [geometryKey, props.campus]) // Editing a measurement must not reset the map viewport.
 
   useEffect(() => {
-    const timer = window.setTimeout(refit, 240)
+    const timer = window.setTimeout(()=>refit(), 240)
     return () => clearTimeout(timer)
   }, [props.layoutKey, props.screen, props.campus])
 
@@ -230,13 +251,41 @@ export default function CampusMap(props: Props) {
     if (following && padding.usable) map.panInside(latlng(coordinate), { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight, animate: !reducedMotion, duration: .2 })
   }, [props.preview, props.layoutKey, props.campus])
 
+  useEffect(()=>{
+    if(props.preview?.playing||props.preview?.following)device.session.setFollowing(false)
+  },[props.preview?.playing,props.preview?.following,device.session])
+
+  useEffect(()=>{
+    const map=mapRef.current
+    if(!map)return
+    const state=device.state
+    if(!state.fix){ownMarkerRef.current?.remove();accuracyRef.current?.remove();ownMarkerRef.current=null;accuracyRef.current=null;return}
+    const live=isLiveLocation(state),color=live?'#146cda':'#6c7c8c'
+    const icon=L.divIcon({className:`device-location-marker ${live?'':'stale'}`,html:'<span></span>',iconSize:[32,32],iconAnchor:[16,16]})
+    const label=document.createElement('span');label.textContent=live?'我的位置':'上次位置，待更新'
+    if(!ownMarkerRef.current){
+      ownMarkerRef.current=L.marker(latlng(state.fix.coordinate),{icon,keyboard:false,interactive:false,zIndexOffset:700}).bindTooltip(label,{permanent:true,direction:'top',offset:[0,-15],className:'device-location-label'}).addTo(map)
+      ownMarkerRef.current.getElement()?.setAttribute('aria-hidden','true')
+      accuracyRef.current=L.circle(latlng(state.fix.coordinate),{radius:state.fix.accuracyM,color,weight:1,fillColor:color,fillOpacity:.12,interactive:false}).addTo(map)
+    }else{
+      ownMarkerRef.current.setLatLng(latlng(state.fix.coordinate)).setIcon(icon).setTooltipContent(label)
+      accuracyRef.current?.setLatLng(latlng(state.fix.coordinate)).setRadius(state.fix.accuracyM).setStyle({color,fillColor:color})
+    }
+    if(state.following&&live&&!props.preview?.playing&&!props.preview?.following){
+      const resetZoom=ownFocusRef.current!==state.focusRequest
+      ownFocusRef.current=state.focusRequest
+      focusMyLocation(resetZoom)
+    }
+  },[device.state,props.campus,props.layoutKey,props.preview?.playing,props.preview?.following])
+
   return <section className="map-shell" aria-label="臺大校園路線地圖">
     <div className={`map-canvas ${props.pickingEntrance ? 'picking-entrance' : ''}`} ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />
     {props.pickingEntrance && <div className="map-pick-note" role="status">點選入口位置，座標會填入目前草稿</div>}
     <div className="map-title-pill"><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖書館與博雅教學館</span></div>
     <div className="map-actions">
       <button className={`map-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖層" aria-expanded={layersOpen} title="地圖圖層"><Layers3 size={20} /></button>
-      <button className="map-tool" onClick={refit} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} /></button>
+      <button className="map-tool" onClick={()=>{device.session.setFollowing(false);refit(false)}} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} /></button>
+      {props.screen!=='editor'&&<LocationControls state={device.state} session={device.session} inCoverage={!device.state.fix||withinLocationCoverage(device.state.fix,props.campus.paths.flatMap(path=>path.coordinates))} onActivity={()=>actions.current.onLocationActivity?.()}/>}
     </div>
     {layersOpen && <div className="layer-popover">
       <div className="layer-title">地圖圖層<button className="icon-button" onClick={() => setLayersOpen(false)} aria-label="關閉圖層選單"><X size={17} /></button></div>
