@@ -2,15 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {createPortal} from 'react-dom'
 import L from 'leaflet'
 import { Layers3, MapPin, Scan, X, CloudOff } from 'lucide-react'
-import type { Campus, CatalogCategory, CatalogPlace, Coordinate, Mode, Route, Screen } from './types'
+import type { Campus, CatalogCategory, CatalogPlace, Coordinate, MapTheme, Mode, Route, Screen } from './types'
 import { bottlenecks, lineMidpoint, routeCoordinates } from './routes'
-import { reportState } from './community-model'
+import { categories, reportState } from './community-model'
 import type { CommunityReport, CommunitySegment } from './community-model'
 import { isLiveLocation, withinLocationCoverage } from './device-location'
 import type { DeviceLocationSession } from './device-location'
 import { useDeviceLocation } from './useDeviceLocation'
 import LocationControls from './LocationControls'
 import {categoryLabels,findPlaces} from './places'
+import { reportMatchesSegment, slopeStyle } from './road-conditions'
+import { mapThemes, ThemeChooser, ThemeLegend } from './MapThemes'
 
 interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
@@ -22,6 +24,8 @@ interface Props {
   onLocationActivity?:()=>void; locationSession?:DeviceLocationSession
   catalogPlaces?:CatalogPlace[];catalogCategory?:CatalogCategory;catalogQuery?:string;selectedPlaceId?:string;discoveryActive?:boolean
   onSelectPlace?:(id:string)=>void;onReturnRoutes?:()=>void
+  mapTheme?:MapTheme;onThemeChange?:(theme:MapTheme)=>void
+  communityFocus?:{coordinate:Coordinate;request:number}
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
 export const colors = { gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
@@ -44,7 +48,9 @@ export default function CampusMap(props: Props) {
   const ownFocusRef=useRef(0)
   const actions = useRef(props)
   actions.current = props
+  const layerButton=useRef<HTMLButtonElement>(null)
   const [layersOpen, setLayersOpen] = useState(false)
+  useEffect(()=>{if(!layersOpen)return;const close=(event:KeyboardEvent)=>{if(event.key==='Escape'){setLayersOpen(false);layerButton.current?.focus()}};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close)},[layersOpen])
   const [showCampus, setShowCampus] = useState(true)
   const [showRamps, setShowRamps] = useState(false)
   const [showCommunity, setShowCommunity] = useState(true)
@@ -52,6 +58,8 @@ export default function CampusMap(props: Props) {
   const [campusError, setCampusError] = useState(false)
   const [zoom,setZoom]=useState(17)
   const [viewRevision,setViewRevision]=useState(0)
+  const theme=props.mapTheme??'routes'
+  const showFacilities=theme==='facilities'||(theme==='routes'&&showRamps)
   const catalogMatches=useMemo(()=>props.catalogPlaces?findPlaces(props.catalogPlaces,props.catalogQuery,props.catalogCategory):[],[props.catalogPlaces,props.catalogQuery,props.catalogCategory])
   const geometryKey = JSON.stringify(props.routes.map(routeCoordinates))
 
@@ -167,12 +175,20 @@ export default function CampusMap(props: Props) {
     const selected = props.routes.find(r => r.id === props.selectedId) ?? props.routes[0]
     props.routes.forEach(route => {
       const isSelected = route.id === props.selectedId
-      const color = props.mode === 'survey' ? '#82918a' : colors[route.id as keyof typeof colors] ?? colors.survey
+      const color = theme==='slope'||theme==='conditions' ? '#718096' : props.mode === 'survey' ? '#82918a' : colors[route.id as keyof typeof colors] ?? colors.survey
       const points = routeCoordinates(route).map(latlng)
       L.polyline(points, { color: '#ffffff', weight: isSelected ? 10 : 8, opacity: focus && !isSelected ? .4 : .9, interactive: false, lineCap: 'round' }).addTo(group)
       const line = L.polyline(points, { color, weight: isSelected ? 5.5 : 4, opacity: focus && !isSelected ? .22 : isSelected ? 1 : .78, dashArray: route.id === 'direct' ? '8 7' : undefined })
       line.on('click', () => actions.current.onSelectRoute(route.id)).addTo(group)
-      if (isSelected && (props.screen === 'detail' || props.screen === 'editor')) {
+      if(theme==='slope'||theme==='conditions')route.segments.forEach(segment=>{
+        const reports=(props.communityReports??[]).filter(r=>reportMatchesSegment(r,segment,props.communitySegments))
+        const active=reports.filter(r=>reportState(r).kind==='active')
+        const blocked=active.some(r=>r.impact==='blocked'),difficult=active.some(r=>r.impact==='difficult')
+        const style=theme==='slope'?slopeStyle(segment.maxSlopePercent):{color:blocked?'#973628':difficult?'#a55d16':'#67778a',dashArray:blocked?'3 4':difficult?'10 4':'3 6',label:blocked?'近期有人回報無法通行':difficult?'近期有人回報通行困難':reports.length?'其他或待確認回報':'尚無回報，通行情況待確認'}
+        const label=document.createElement('span');label.textContent=`${segment.name}：${theme==='slope'?(segment.maxSlopePercent===null?'坡度未知':`最大坡度 ${segment.maxSlopePercent}%${props.mode==='demo'?'（示範）':''}`):style.label}`
+        L.polyline(segment.coordinates.map(latlng),{color:style.color,weight:segment.id===props.segmentId?8:isSelected?6:4,opacity:focus&&!isSelected?0.5:1,dashArray:style.dashArray}).bindTooltip(label).on('click',()=>actions.current.onSelectSegment(segment.id)).addTo(group)
+      })
+      if (theme==='routes' && isSelected && (props.screen === 'detail' || props.screen === 'editor')) {
         route.segments.forEach(segment => {
           const active = segment.id === props.segmentId
           L.polyline(segment.coordinates.map(latlng), { color: active ? '#e09c37' : color, weight: active ? 8 : 5, opacity: 1 })
@@ -181,7 +197,7 @@ export default function CampusMap(props: Props) {
         })
       }
     })
-    if (selected && ['compare', 'detail', 'confirm'].includes(props.screen)) {
+    if (theme==='routes' && selected && ['compare', 'detail', 'confirm'].includes(props.screen)) {
       const hints = bottlenecks(selected)
       selected.segments.forEach(segment => {
         const matches = hints.filter(h => h.segmentIds.includes(segment.id))
@@ -220,13 +236,13 @@ export default function CampusMap(props: Props) {
         L.circleMarker(latlng(place.coordinate), { radius: 7, color: '#fff', weight: 2, fillColor: '#6d8277', fillOpacity: 1 }).bindTooltip(label, { permanent: true, direction: 'top', className: 'entrance-label' }).addTo(group)
       })
     }
-  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus,props.discoveryActive])
+  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus,props.discoveryActive,theme,props.communityReports,props.communitySegments])
 
   useEffect(() => {
     const group = facilitiesRef.current
     if (!group) return
     group.clearLayers()
-    if (showRamps&&!props.catalogPlaces) props.campus.facilities.forEach(facility => {
+    if (showFacilities&&!props.catalogPlaces) props.campus.facilities.forEach(facility => {
       const content = document.createElement('div')
       const title = document.createElement('strong')
       title.textContent = facility.name
@@ -235,7 +251,7 @@ export default function CampusMap(props: Props) {
       content.append(title, body)
       L.circleMarker(latlng(facility.coordinate), { radius: 6, color: '#fff', weight: 2, fillColor: '#c38a39', fillOpacity: .9 }).bindPopup(content).addTo(group)
     })
-  }, [showRamps, props.campus,props.catalogPlaces])
+  }, [showFacilities, props.campus,props.catalogPlaces])
 
   useEffect(()=>{
     const group=buildingClicksRef.current
@@ -265,7 +281,7 @@ export default function CampusMap(props: Props) {
     }
     const filtered=!!props.catalogCategory||!!props.catalogQuery?.trim()
     const bounds=mapRef.current?.getBounds().pad(.05)
-    const shown=props.catalogPlaces.filter(p=>p.id===props.selectedPlaceId||(bounds?.contains(latlng(p.coordinate))&&(filtered?catalogMatches.some(match=>match.id===p.id):!!p.routePlaceId||showRamps&&p.category==='ramp'||zoom>=17&&p.category==='landmark'||zoom>=19&&p.category==='building')))
+    const shown=props.catalogPlaces.filter(p=>p.id===props.selectedPlaceId||(bounds?.contains(latlng(p.coordinate))&&(filtered?catalogMatches.some(match=>match.id===p.id):theme==='facilities'?p.category!=='building'&&p.category!=='landmark':!!p.routePlaceId||showFacilities&&p.category==='ramp'||zoom>=17&&p.category==='landmark'||zoom>=19&&p.category==='building')))
     for(const place of shown){
       const active=place.id===props.selectedPlaceId
       const element=document.createElement('span');element.textContent=({building:'館',toilet:'廁',elevator:'梯',water:'水',rest:'休',ramp:'坡',landmark:'景'} as const)[place.category]
@@ -277,7 +293,7 @@ export default function CampusMap(props: Props) {
       target?.setAttribute('aria-label',`開啟地點：${place.name}，${categoryLabels[place.category]}`)
       if(target)L.DomEvent.on(target,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key==='Enter'||key===' '){L.DomEvent.preventDefault(event);actions.current.onSelectPlace?.(place.id)}})
     }
-  },[props.catalogPlaces,props.catalogCategory,props.catalogQuery,props.selectedPlaceId,props.campus,catalogMatches,showRamps,zoom,viewRevision])
+  },[props.catalogPlaces,props.catalogCategory,props.catalogQuery,props.selectedPlaceId,props.campus,catalogMatches,showFacilities,theme,zoom,viewRevision])
 
   useEffect(()=>{
     if(!props.discoveryActive)return
@@ -290,9 +306,9 @@ export default function CampusMap(props: Props) {
     const group=communityRef.current
     if(!group)return
     group.clearLayers()
-    if(!showCommunity)return
+    if(theme!=='conditions'&&(theme!=='routes'||!showCommunity))return
     for(const segment of props.communitySegments??[]){
-      const reports=(props.communityReports??[]).filter(r=>r.segmentId===segment.id)
+      const reports=(props.communityReports??[]).filter(r=>r.segmentId===segment.id&&!r.coordinate)
       if(!reports.length)continue
       const active=reports.filter(r=>reportState(r).kind==='active')
       const blocked=active.some(r=>r.impact==='blocked')
@@ -304,7 +320,32 @@ export default function CampusMap(props: Props) {
       const element=marker.getElement()
       if(element){element.setAttribute('aria-label',title);element.setAttribute('role','button');L.DomEvent.on(element,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key===' '||key==='Enter'){L.DomEvent.stop(event);actions.current.onSelectCommunity?.(segment.id)}})}
     }
-  },[props.communityReports,props.communitySegments,showCommunity,props.campus])
+    for(const report of (props.communityReports??[]).filter(r=>r.coordinate)){
+      const state=reportState(report),segment=props.communitySegments?.find(s=>s.id===report.segmentId)
+      const title=`${segment?.name??'路段'}：${categories[report.category]}，${state.label}。使用者標記位置，未經實勘。`
+      const content=document.createElement('span');content.textContent='!'
+      const icon=L.divIcon({className:`community-map-marker precise ${state.kind!=='active'?'stale':report.impact==='blocked'?'blocked':''}`,html:content,iconSize:[44,44],iconAnchor:[22,22]})
+      const label=document.createElement('span');label.textContent=title
+      const marker=L.marker(latlng(report.coordinate!),{icon,title,keyboard:true,zIndexOffset:400,bubblingMouseEvents:false}).bindTooltip(label).addTo(group)
+      marker.on('click',()=>actions.current.onSelectCommunity?.(report.segmentId))
+      const element=marker.getElement();element?.setAttribute('aria-label',title);element?.setAttribute('role','button')
+      if(element)L.DomEvent.on(element,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key===' '||key==='Enter'){L.DomEvent.stop(event);actions.current.onSelectCommunity?.(report.segmentId)}})
+    }
+  },[props.communityReports,props.communitySegments,showCommunity,props.campus,theme])
+
+  useEffect(()=>{
+    if(!props.communityFocus)return
+    const timer=window.setTimeout(()=>{
+      const map=mapRef.current,point=props.communityFocus?.coordinate
+      if(!map||!point)return
+      const padding=visiblePadding()
+      device.session.setFollowing(false)
+      map.setZoom(19,{animate:false})
+      if(padding.usable)map.panInside(latlng(point),{paddingTopLeft:padding.topLeft,paddingBottomRight:padding.bottomRight,animate:false})
+      else map.panTo(latlng(point),{animate:false})
+    },300)
+    return()=>clearTimeout(timer)
+  },[props.communityFocus,props.layoutKey,props.screen,device.session])
 
   useEffect(() => { refit() }, [geometryKey, props.campus]) // Editing a measurement must not reset the map viewport.
 
@@ -359,20 +400,21 @@ export default function CampusMap(props: Props) {
     {props.pickingEntrance && <div className="map-pick-note" role="status">點選入口位置，座標會填入目前草稿</div>}
     <div className="map-title-pill"><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖書館與博雅教學館</span></div>
     <div className="map-actions">
-      <button className={`map-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖層" aria-expanded={layersOpen} title="地圖圖層"><Layers3 size={20} /></button>
+      <button ref={layerButton} className={`map-tool map-theme-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖層" aria-expanded={layersOpen} title="地圖圖層"><Layers3 size={20} /><span>{theme==='routes'?'圖層':mapThemes.find(t=>t.id===theme)?.label}</span></button>
       <button className="map-tool" onClick={()=>{device.session.setFollowing(false);if(props.discoveryActive)props.onReturnRoutes?.();refit(false,false)}} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} /></button>
       {props.screen!=='editor'&&<LocationControls state={device.state} session={device.session} inCoverage={!device.state.fix||withinLocationCoverage(device.state.fix,props.campus.paths.flatMap(path=>path.coordinates))} onActivity={()=>actions.current.onLocationActivity?.()}/>}
     </div>
     {layersOpen && createPortal(<div className="layer-popover">
       <div className="layer-title">地圖圖層<button className="icon-button" onClick={() => setLayersOpen(false)} aria-label="關閉圖層選單"><X size={17} /></button></div>
+      {props.onThemeChange&&<><ThemeChooser theme={theme} onChange={next=>{props.onThemeChange?.(next);setLayersOpen(false);layerButton.current?.focus()}} /><ThemeLegend theme={theme} mode={props.mode}/></>}
       <label><input type="checkbox" checked={showCampus} onChange={e => setShowCampus(e.target.checked)} /><span>臺大校園建物與道路</span></label>
-      <label><input type="checkbox" checked={showRamps} onChange={e => setShowRamps(e.target.checked)} /><span>公開斜坡道 <small>{props.campus.facilities.length} 個</small></span></label>
-      <label><input type="checkbox" checked={showCommunity} onChange={e=>setShowCommunity(e.target.checked)}/><span>社群路況 <small>{props.communityReports?.length??0} 則</small></span></label>
+      <label><input type="checkbox" checked={showFacilities} disabled={theme!=='routes'} onChange={e => setShowRamps(e.target.checked)} /><span>公開斜坡道 <small>{props.campus.facilities.length} 個</small></span></label>
+      <label><input type="checkbox" checked={theme==='conditions'||theme==='routes'&&showCommunity} disabled={theme!=='routes'} onChange={e=>setShowCommunity(e.target.checked)}/><span>社群路況 <small>{props.communityReports?.length??0} 則</small></span></label>
       <p>公開點位尚未實地查核。</p>
     </div>,rootRef.current?.closest('.route-workspace')??document.body)}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
-    <div className="map-legend">
-      {props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />較平緩</span><span><i className="legend-line direct" />距離較短</span></> : <span><MapPin size={15} />已查核動線</span>}
+    <div className={`map-legend ${theme!=='routes'?'theme-legend':''}`} aria-live="polite">
+      {theme!=='routes'?<ThemeLegend theme={theme} mode={props.mode}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />較平緩</span><span><i className="legend-line direct" />距離較短</span></> : <span><MapPin size={15} />已查核動線</span>}
     </div>
     <div className="map-north" aria-hidden="true"><span>↑</span>N</div>
   </section>

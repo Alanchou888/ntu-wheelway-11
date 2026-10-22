@@ -14,6 +14,7 @@ export type PlaceId = 'library' | 'boya'
 export type Verification = 'demo' | 'unverified' | 'verified' | 'blocked'
 export type Mode = 'demo' | 'survey'
 export type Preference = 'gentle' | 'short'
+export type MapTheme = 'routes' | 'conditions' | 'slope' | 'facilities'
 export type Wheelchair = 'manual' | 'electric'
 export type Screen = 'setup' | 'compare' | 'detail' | 'confirm' | 'editor' | 'saved' | 'help'
 export interface Photo { src: string; alt: string; caption: string; sourceUrl?: string }
@@ -37,4 +38,4 @@ export interface Route {
 export interface SurveyData { version: number; routes: Route[] }
 export interface RouteMetrics { distanceM: number; maxSlopePercent: number | null; minWidthM: number | null; maxStepCm: number | null; surfaces: string[] }
 export interface RouteLimits { maxSlope: number | null; minWidth: number | null; maxStep: number | null; recheckDays: number | null }
-export interface NavigationState { screen: Screen; mode: Mode; origin: PlaceId; wheelchair: Wheelchair; preference: Preference; routeId: string; segmentId: string; limits?: RouteLimits; placeId?: string; category?: CatalogCategory }
+export interface NavigationState { screen: Screen; mode: Mode; origin: PlaceId; wheelchair: Wheelchair; preference: Preference; routeId: string; segmentId: string; limits?: RouteLimits; placeId?: string; category?: CatalogCategory; avoidReports?: boolean; mapTheme?: MapTheme }

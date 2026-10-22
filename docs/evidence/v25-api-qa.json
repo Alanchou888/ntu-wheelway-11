@@ -1,0 +1,20 @@
+{
+  "version": "2.5.0",
+  "checkedAt": "2026-10-22T05:44:21.748Z",
+  "environment": "isolated loopback Worker and D1",
+  "automatedTestFixtures": true,
+  "productionWrites": false,
+  "checks": [
+    "anonymous session",
+    "anonymous writes rejected",
+    "invalid or distant points rejected by live Worker",
+    "point report created",
+    "point rounded and shared across visitors",
+    "account identifier stays private",
+    "duplicate point report rejected",
+    "cross-account confirmation retained",
+    "whole-road report remains supported",
+    "other account cannot withdraw",
+    "author withdrawal removes test reports from public feed"
+  ]
+}

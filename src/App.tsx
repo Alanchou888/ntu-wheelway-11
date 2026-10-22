@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Accessibility, ArrowDownUp, ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Copy, Footprints, Info, LoaderCircle, MessageSquare, Mountain, Printer, Route as RouteIcon, ShieldCheck, SlidersHorizontal, TriangleAlert, X, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CampusMap from './CampusMap'
-import type { Campus, CatalogCategory, CatalogPlace, Entrance, Mode, NavigationState, Route, Screen, Segment } from './types'
+import type { Campus, CatalogCategory, CatalogPlace, Coordinate, Entrance, Mode, NavigationState, Route, Screen, Segment } from './types'
 import { buildDemoRoutes, formatDate, formatDistance, fromHash, lineDistance, lineMidpoint, metrics, placeNames, reverseRoute, segmentLabel, toHash } from './routes'
 import { BottleneckList, ComparisonSummary } from './RouteInsights'
 import { daysSince, emptyLimits, favoriteFor, flushSurveyDraft, oldestVerification, readFavorites, readInitialNavigation, resolveSharedRoute, savePreferences, selectCandidates, writeFavorites } from './product'
@@ -25,6 +25,9 @@ import {CatalogStatus,PlaceCard,PlaceList,PlaceSearch} from './PlaceDiscovery'
 import './product.css'
 import './campus-design.css'
 import './route-experience.css'
+import { conditionDataReady, filterConditions, routeReports } from './road-conditions'
+import ConditionControls from './ConditionControls'
+import './road-conditions.css'
 
 const SurveyEditor = lazy(() => import('./SurveyEditor'))
 
@@ -64,7 +67,7 @@ function SourceDialog({ campus, onClose }: { campus: Campus; onClose: () => void
 }
 
 function EmptyRoutes({ onDemo, onSetup, onRetry, failed, filtered }: { onDemo: () => void; onSetup: () => void; onRetry: () => void; failed: boolean; filtered: boolean }) {
-  return <div className="empty-state"><div className="empty-icon"><ClipboardCheck size={34} strokeWidth={1.5} /></div><span className="eyebrow">{filtered ? '依目前條件篩選' : '等待實勘資料'}</span><h2 id="panel-heading" tabIndex={-1}>{failed ? '查核資料暫時無法載入' : filtered ? '目前沒有符合條件的路線' : '目前無已查核路線'}</h2><p>{failed ? '圖資仍可使用。請重新載入查核資料，或先體驗示範模式。' : filtered ? '可以查看下方排除原因，再回設定調整自己的通行限制。' : '總圖至博雅的入口與路段尚待團隊實地查核。你可以先使用示範路線，體驗完整選路流程。'}</p><div className="empty-rule"><ShieldCheck size={20} /><span>{filtered ? '設定的量測條件不符合，或缺少對應量測值時，路線會被排除。' : '僅列出全程及兩端入口皆已查核、無階梯且未封閉的實勘路線。'}</span></div>{failed && <button className="button primary wide" onClick={onRetry}>重新載入查核資料</button>}{!filtered && <button className="button secondary wide" onClick={onDemo}>試用兩條示範路線<ArrowRight size={18} /></button>}<button className="button plain wide" onClick={onSetup}>返回設定條件</button></div>
+  return <div className="empty-state"><div className="empty-icon"><ClipboardCheck size={34} strokeWidth={1.5} /></div><span className="eyebrow">{filtered ? '依目前條件篩選' : '等待實勘資料'}</span><h2 id="panel-heading" tabIndex={-1}>{failed ? '查核資料暫時無法載入' : filtered ? '目前沒有符合條件的路線' : '目前無已查核路線'}</h2><p>{failed ? '圖資仍可使用。請重新載入查核資料，或先體驗示範模式。' : filtered ? '可以查看下方排除原因，再回設定調整自己的通行限制。' : '總圖至博雅的入口與路段尚待團隊實地查核。你可以先使用示範路線，體驗完整選路流程。'}</p><div className="empty-rule"><ShieldCheck size={20} /><span>{filtered ? '路線會依量測限制及你開啟的社群避開條件排除，請查看下方原因。' : '僅列出全程及兩端入口皆已查核、無階梯且未封閉的實勘路線。'}</span></div>{failed && <button className="button primary wide" onClick={onRetry}>重新載入查核資料</button>}{!filtered && <button className="button secondary wide" onClick={onDemo}>試用兩條示範路線<ArrowRight size={18} /></button>}<button className="button plain wide" onClick={onSetup}>返回設定條件</button></div>
 }
 
 function EntranceCard({ entrance, letter }: { entrance: Entrance; letter: string }) {
@@ -106,6 +109,7 @@ export default function App() {
   const [sheetSize, setSheetSize] = useState<SheetSize>('half')
   const [communityOpen, setCommunityOpen] = useState(false)
   const [communitySegment, setCommunitySegment] = useState('')
+  const [communityFocus, setCommunityFocus] = useState<{ coordinate: Coordinate; request: number }>()
   const community = useCommunity(!!campus)
   const mobile = useMediaQuery('(max-width: 760px), (max-height: 540px) and (max-width: 1000px)')
   const panelRef = useRef<HTMLElement>(null)
@@ -139,8 +143,8 @@ export default function App() {
     if ('wheelchair' in patch || 'preference' in patch || 'limits' in patch) setProfileFeedback('')
   }
   const allRoutes = useMemo(() => campus ? [...buildDemoRoutes(campus), ...survey.routes] : [], [campus, survey])
-  const communitySegments = useMemo(() => allRoutes.flatMap(route => route.segments.map(segment => ({ id: segment.id, name: segment.name, routeName: route.name, coordinate: lineMidpoint(segment.coordinates) }))), [allRoutes])
-  const candidates = useMemo(() => selectCandidates(allRoutes, state), [allRoutes, state.mode, state.preference, state.limits])
+  const communitySegments = useMemo(() => allRoutes.flatMap(route => route.segments.map(segment => ({ id: segment.id, name: segment.name, routeName: route.name, coordinate: lineMidpoint(segment.coordinates), coordinates: segment.coordinates }))), [allRoutes])
+  const candidates = useMemo(() => filterConditions(selectCandidates(allRoutes, state), community.reports, { enabled: !!state.avoidReports, ready: conditionDataReady(community.fetchedAt, community.error, community.now), now: community.now, segments: communitySegments }), [allRoutes, state.mode, state.preference, state.limits, state.avoidReports, community.reports, community.fetchedAt, community.error, community.now, communitySegments])
   const routes = useMemo(() => candidates.accepted.map(r => state.origin === r.originEntrance.placeId ? r : reverseRoute(r)), [candidates, state.origin])
   const resolved = resolveSharedRoute(routes, state)
   const selected = resolved.route
@@ -176,7 +180,7 @@ export default function App() {
     if (favorites.length >= 20 && !favorites.some(f => f.key === favorite.key)) { setFavoriteMessage('已收藏 20 條動線，請先移除不需要的收藏。'); return }
     if (persistFavorites([favorite, ...favorites.filter(f => f.key !== favorite.key)])) { setUndoFavorites(null); setFavoriteMessage('已收藏在這個瀏覽器，可從「我的收藏」開啟。') }
   }
-  const remember = () => { try { savePreferences(state); setProfileFeedback('已記住輪椅類型、偏好與通行條件。') } catch { setProfileFeedback('這個瀏覽器無法記住設定，仍可繼續選路。') } }
+  const remember = () => { try { savePreferences(state); setProfileFeedback('已記住輪椅類型、偏好、通行條件及路況避開設定。') } catch { setProfileFeedback('這個瀏覽器無法記住設定，仍可繼續選路。') } }
   const inspectTourSegment = (segment: Segment) => {
     tour.pause()
     void navigate({ screen: 'detail', routeId: selected?.id ?? '', segmentId: segment.id })
@@ -190,11 +194,12 @@ export default function App() {
   }
   const explorer = tourRoute ? <RouteExplorer route={tourRoute} tour={tour} onInspect={inspectTourSegment} onStart={startTour} /> : null
   const openCommunity = (segmentId = '') => { tour.pause(); setCommunitySegment(segmentId); setCommunityOpen(true) }
-  const inspectCommunitySegment = (id: string) => {
+  const inspectCommunitySegment = (id: string, coordinate?: Coordinate | null) => {
     const route = routes.find(r => r.segments.some(s => s.id === id))
     if (!route) return false
     tour.pause()
-    void navigate({ screen: 'detail', routeId: route.id, segmentId: id })
+    void navigate({ screen: 'detail', routeId: route.id, segmentId: id, mapTheme: 'conditions' })
+    if (coordinate) setCommunityFocus(previous => ({ coordinate, request: (previous?.request ?? 0) + 1 }))
     setSheetSize('full')
     return true
   }
@@ -250,6 +255,7 @@ export default function App() {
               <fieldset className="form-section"><legend>移動需求<span>僅註記需求</span></legend><div className="chair-options">{[{ value: 'manual' as const, label: '手動輪椅', icon: Accessibility }, { value: 'electric' as const, label: '電動輪椅', icon: Zap }].map(item => <label key={item.value} className={state.wheelchair === item.value ? 'checked' : ''}><input type="radio" name="wheelchair" value={item.value} checked={state.wheelchair === item.value} onChange={() => navigate({ wheelchair: item.value })} /><item.icon size={19} /><span>{item.label}</span><i className="radio-dot" /></label>)}</div></fieldset>
               <fieldset className="form-section preference-section"><legend>路線偏好</legend><div className="preference-options">{[{ value: 'short' as const, label: '距離較短', description: '依路程排序', icon: RouteIcon }, { value: 'gentle' as const, label: '較平緩', description: '依最大坡度排序', icon: Mountain }].map(item => <label key={item.value} className={state.preference === item.value ? 'checked' : ''}><input type="radio" name="preference" value={item.value} checked={state.preference === item.value} onChange={() => navigate({ preference: item.value })} /><span className="preference-top"><item.icon size={21} strokeWidth={1.8} aria-hidden="true" /><i className="radio-dot" /></span><strong>{item.label}</strong><span className="preference-description">{item.description}</span></label>)}</div></fieldset>
               <LimitControls limits={state.limits ?? emptyLimits} onChange={limits => navigate({ limits })} onSave={remember} feedback={profileFeedback} />
+              <ConditionControls enabled={!!state.avoidReports} onChange={avoidReports => navigate({ avoidReports })} community={community} />
             </form>
           </>}
 
@@ -258,7 +264,8 @@ export default function App() {
           {state.screen === 'compare' && routes.length > 0 && (isDemo || !surveyLoading) && <>
             <div className="panel-title-row"><h1 id="panel-heading" tabIndex={-1}>比較路線</h1><button className="back-link" onClick={() => navigate({ screen: 'setup' })}><SlidersHorizontal size={16} aria-hidden="true" />修改條件</button></div><p className="route-pair"><span>{placeNames[state.origin]}</span><ArrowRight size={16} aria-hidden="true" /><span>{placeNames[destination]}</span></p>
             <div className="compare-preference"><span>{routes.length} 條{isDemo ? '示範' : ''}路線</span><span>{state.wheelchair === 'manual' ? '手動輪椅' : '電動輪椅'}</span><span>{state.preference === 'gentle' ? '依坡度排序' : '依距離排序'}</span></div>
-            <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'direct' ? 'direct' : 'gentle'} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Mountain size={20} aria-hidden="true" /> : <RouteIcon size={20} aria-hidden="true" />}</span><div><strong>{route.name}</strong>{route.kind === 'survey' && <span>{route.description}</span>}</div>{i === 0 && <span className="preference-tag">符合偏好</span>}</div><RouteStats route={route} />{(()=>{const summary=communitySummary(community.reports,new Set(route.segments.map(s=>s.id)));return summary.total>0?<p className="community-route-note"><MessageSquare size={14}/><span>社群路況 {summary.total} 則，其中 {summary.recent} 則近期回報{summary.blocked>0?'，含通行受阻回報':''}。查看路段了解現場資訊。</span></p>:null})()}<div className="route-card-surface"><span>無階梯{isDemo ? '（示範）' : ''}</span><span>{metrics(route).surfaces.join('、')}</span></div>{route.kind === 'survey' && <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>}<div className="route-card-footer"><span>{isDemo ? '示範路況，尚未實勘' : '全程及入口已查核'}</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div></button>)}</div>
+            <ConditionControls enabled={!!state.avoidReports} onChange={avoidReports => navigate({ avoidReports, routeId: '', segmentId: '' })} community={community} />
+            <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'direct' ? 'direct' : 'gentle'} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Mountain size={20} aria-hidden="true" /> : <RouteIcon size={20} aria-hidden="true" />}</span><div><strong>{route.name}</strong>{route.kind === 'survey' && <span>{route.description}</span>}</div>{i === 0 && <span className="preference-tag">符合偏好</span>}</div><RouteStats route={route} />{(()=>{const relevant=routeReports(route,community.reports,communitySegments);const summary=communitySummary(relevant,new Set(relevant.map(r=>r.segmentId)),community.now);return summary.total>0?<p className="community-route-note"><MessageSquare size={14}/><span>社群路況 {summary.total} 則，其中 {summary.recent} 則近期回報{summary.blocked>0?'，含通行受阻回報':''}。查看路段了解現場資訊。</span></p>:null})()}<div className="route-card-surface"><span>無階梯{isDemo ? '（示範）' : ''}</span><span>{metrics(route).surfaces.join('、')}</span></div>{route.kind === 'survey' && <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>}<div className="route-card-footer"><span>{isDemo ? '示範路況，尚未實勘' : '全程及入口已查核'}</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div></button>)}</div>
             <ComparisonSummary routes={routes} />
           </>}
 
@@ -285,7 +292,7 @@ export default function App() {
         {!discovering && state.screen === 'setup' && <div className="setup-actions"><button type="submit" form="route-planner" className="button primary wide search-button">比較路線<ArrowRight size={19} aria-hidden="true" /></button><p className="form-footnote">{isDemo ? '示範動線的路況數值皆為模擬。' : '未查核路段不列入候選路線。'}</p></div>}
       </MapSheet>
       {catalog&&<PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces} onQuery={value=>{tour.pause();setPlaceQuery(value);if(state.placeId||state.category)void navigate({placeId:undefined,category:undefined});setSheetSize('half')}} onChoose={choosePlace} onCategory={chooseCategory} onClear={clearDiscovery} onBrowse={()=>{if(!placeQuery.trim()&&!state.category)void navigate({category:'building',placeId:undefined});setSheetSize('full');requestAnimationFrame(()=>document.getElementById('place-heading')?.focus({preventScroll:true}))}} onClearRecent={()=>{if(clearRecentPlaces()){setRecentPlaces([]);setPlaceFeedback('已清除最近查看。')}else setPlaceFeedback('此瀏覽器無法清除儲存紀錄，可從網站設定管理。')}}/>}
-      <CampusMap catalogPlaces={catalog?.places} catalogCategory={state.category} catalogQuery={placeQuery} selectedPlaceId={state.placeId} discoveryActive={discovering} onSelectPlace={id=>{const place=catalog?.places.find(p=>p.id===id);if(place)choosePlace(place)}} onReturnRoutes={clearDiscovery} campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} communityReports={community.reports} communitySegments={communitySegments} onSelectCommunity={openCommunity} onLocationActivity={() => { tour.pause(); tour.setFollowing(false);if(discovering){setPlaceQuery('');void navigate({placeId:undefined,category:undefined})} }} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => {setPlaceQuery('');void navigate({ routeId: id, segmentId: '',placeId:undefined,category:undefined });setSheetSize('half')}} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
+      <CampusMap mapTheme={state.mapTheme} onThemeChange={mapTheme=>{tour.pause();setPlaceQuery('');setPlaceFeedback('');void navigate({mapTheme,placeId:undefined,category:undefined});if(mobile)setSheetSize('map')}} communityFocus={communityFocus} catalogPlaces={catalog?.places} catalogCategory={state.category} catalogQuery={placeQuery} selectedPlaceId={state.placeId} discoveryActive={discovering} onSelectPlace={id=>{const place=catalog?.places.find(p=>p.id===id);if(place)choosePlace(place)}} onReturnRoutes={clearDiscovery} campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} communityReports={community.reports} communitySegments={communitySegments} onSelectCommunity={openCommunity} onLocationActivity={() => { tour.pause(); tour.setFollowing(false);if(discovering){setPlaceQuery('');void navigate({placeId:undefined,category:undefined})} }} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => {setPlaceQuery('');void navigate({ routeId: id, segmentId: '',placeId:undefined,category:undefined });setSheetSize('half')}} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', routeId: routes.find(route=>route.segments.some(segment=>segment.id===id))?.id ?? selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
       {!mobile && explorer && <div className="experience-dock">{explorer}</div>}
     </main>}
     <OfflineStatus snapshotDate={campus?.retrievedAt} beforeUpdate={async () => { try { await flushSurveyDraft(); return document.documentElement.dataset.surveyUnsaved !== 'true' } catch { return false } }} />

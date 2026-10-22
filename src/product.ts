@@ -64,7 +64,7 @@ export function readInitialNavigation(): NavigationState {
     const data = JSON.parse(localStorage.getItem(preferencesKey) ?? 'null')
     if (data?.version === 1 && typeof data.hash === 'string') {
       const preferences = fromHash(data.hash)
-      return { ...initial, wheelchair: preferences.wheelchair, preference: preferences.preference, limits: preferences.limits }
+      return { ...initial, wheelchair: preferences.wheelchair, preference: preferences.preference, limits: preferences.limits, ...(preferences.avoidReports ? { avoidReports: true } : {}) }
     }
   } catch { /* A blocked browser storage must not prevent ordinary route planning. */ }
   return initial

@@ -11,6 +11,7 @@ export type ReportImpact = keyof typeof impacts
 export type Reaction = keyof typeof reactions
 export interface CommunityReport {
   id: string; segmentId: string; category: ReportCategory; impact: ReportImpact
+  coordinate?: Coordinate | null
   message: string; authorName: string; observedAt: string; createdAt: string
   photoUrl: string | null; own: boolean
   counts: Record<Reaction, number>; lastExistsAt: string | null; lastResolvedAt: string | null; lastDifferentAt: string | null
@@ -19,8 +20,9 @@ export interface CommunityReport {
 export interface CommunitySession { signedIn: boolean; available: boolean }
 export interface ReportInput {
   segmentId: string; category: ReportCategory; impact: ReportImpact; message: string; authorName: string; observedAt: string
+  coordinate?: Coordinate | null
 }
-export interface CommunitySegment { id: string; name: string; routeName: string; coordinate: Coordinate }
+export interface CommunitySegment { id: string; name: string; routeName: string; coordinate: Coordinate; coordinates?: Coordinate[] }
 const hours: Record<ReportCategory, number> = { parking: 6, rough: 24 * 30, construction: 72, water: 12, traffic: 3, lighting: 24 * 7, other: 24 }
 
 export function reportState(report: CommunityReport, now = Date.now()): { label: string; kind: 'active' | 'stale' | 'resolved' | 'disputed' } {
@@ -49,7 +51,9 @@ export function validateReport(input: unknown, segmentIds: ReadonlySet<string>, 
   if (!Object.hasOwn(impacts, String(value.impact))) throw new Error('請選擇通行影響。')
   const timestamp = typeof value.observedAt === 'string' ? Date.parse(value.observedAt) : NaN
   if (!Number.isFinite(timestamp) || timestamp > now + 120_000 || now - timestamp > 30 * 86_400_000) throw new Error('發現時間需在最近 30 天內，且不能晚於目前時間。')
-  return { segmentId, category: value.category as ReportCategory, impact: value.impact as ReportImpact, message: text('message', 5, 500), authorName: text('authorName', 0, 24) || '校園使用者', observedAt: new Date(timestamp).toISOString() }
+  const coordinate = value.coordinate == null ? null : value.coordinate
+  if (coordinate !== null && (!Array.isArray(coordinate) || coordinate.length !== 2 || !coordinate.every(n => typeof n === 'number' && Number.isFinite(n)) || coordinate[0] < -180 || coordinate[0] > 180 || coordinate[1] < -90 || coordinate[1] > 90)) throw new Error('請選擇有效的地圖位置。')
+  return { segmentId, category: value.category as ReportCategory, impact: value.impact as ReportImpact, message: text('message', 5, 500), authorName: text('authorName', 0, 24) || '校園使用者', observedAt: new Date(timestamp).toISOString(), coordinate: coordinate === null ? null : (coordinate as number[]).map(n => Number(n.toFixed(6))) as Coordinate }
 }
 
 export function communitySummary(reports: CommunityReport[], ids: ReadonlySet<string>, now = Date.now()) {

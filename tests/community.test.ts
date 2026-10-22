@@ -5,6 +5,7 @@ import { communityApi, imageType } from '../server/community'
 import type { CommunityEnv } from '../server/community'
 import { communitySummary, reportState, validateReport } from '../src/community-model'
 import type { CommunityReport } from '../src/community-model'
+import type { Coordinate } from '../src/types'
 
 const ids=new Set(['gentle-1','direct-2'])
 const input=()=>({segmentId:'gentle-1',category:'parking',impact:'difficult',message:'Automated test fixture only',authorName:'TEST',observedAt:new Date().toISOString()})
@@ -20,7 +21,8 @@ const list=async(actor:string|null='test-a')=>(await(await call('reports','GET',
 
 beforeEach(()=>{
   sqlite=new DatabaseSync(':memory:')
-  sqlite.exec(readFileSync(new URL('../drizzle/0000_dear_microbe.sql',import.meta.url),'utf8'))
+  const journal=JSON.parse(readFileSync(new URL('../drizzle/meta/_journal.json',import.meta.url),'utf8'))
+  for(const entry of journal.entries) sqlite.exec(readFileSync(new URL(`../drizzle/${entry.tag}.sql`,import.meta.url),'utf8'))
   const db={prepare(sql:string){let values:unknown[]=[];const prepared={bind(...args:unknown[]){values=args;return prepared},async first(){return sqlite.prepare(sql).get(...values as never[])??null},async all(){return {results:sqlite.prepare(sql).all(...values as never[]),success:true}},async run(){return sqlite.prepare(sql).run(...values as never[])}};return prepared}}
   files=new Map()
   const bucket={async put(key:string,bytes:Uint8Array,options:{httpMetadata:{contentType:string}}){files.set(key,{bytes,httpMetadata:options.httpMetadata})},async get(key:string){const item=files.get(key);return item?{body:item.bytes,httpMetadata:item.httpMetadata}:null},async delete(key:string){files.delete(key)}}
@@ -29,6 +31,22 @@ beforeEach(()=>{
 afterEach(()=>sqlite.close())
 
 describe('community public API and ownership',()=>{
+  it('stores an optional user-chosen point and keeps legacy reports without a point',async()=>{
+    const lines=new Map<string,Coordinate[]>([['gentle-1',[[121.538,25.018],[121.539,25.018]]]])
+    const response=await communityApi(request('reports','POST',{...input(),coordinate:[121.53855555,25.01801]}),env,ids,lines)
+    expect(response.status).toBe(201)
+    expect((await list(null))[0].coordinate).toEqual([121.538556,25.01801])
+    await create('legacy-user')
+    expect((await list(null)).find(r=>r.authorName==='TEST'&&r.coordinate===null)).toBeTruthy()
+  })
+  it('rejects invalid coordinates and points outside the chosen segment on the server',async()=>{
+    const lines=new Map<string,Coordinate[]>([['gentle-1',[[121.538,25.018],[121.539,25.018]]]])
+    for(const coordinate of [[121.538,25.03],[0,0],['121.538',25.018],[121.538],[190,91],{lat:25.018,lng:121.538}]){
+      const response=await communityApi(request('reports','POST',{...input(),coordinate}),env,ids,lines)
+      expect(response.status).toBe(400)
+    }
+    expect(await list(null)).toHaveLength(0)
+  })
   it('allows anonymous reads and requires sign-in for writes',async()=>{
     expect((await call('reports','GET',undefined,null)).status).toBe(200)
     expect((await call('reports','POST',input(),null)).status).toBe(401)

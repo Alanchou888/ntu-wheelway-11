@@ -144,6 +144,8 @@ export function toHash(state: NavigationState): string {
   if (state.limits) for (const [key, n] of Object.entries(state.limits)) if (n !== null) params.set(key, String(n))
   if (state.placeId) params.set('place',state.placeId)
   if (state.category) params.set('category',state.category)
+  if (state.avoidReports) params.set('avoidReports', '1')
+  if (state.mapTheme) params.set('theme', state.mapTheme)
   return `#${params}`
 }
 export function fromHash(hash: string): NavigationState {
@@ -158,6 +160,8 @@ export function fromHash(hash: string): NavigationState {
     mode: p.get('mode') === 'survey' ? 'survey' : 'demo', origin: p.get('from') === 'boya' ? 'boya' : 'library',
     wheelchair: p.get('chair') === 'electric' ? 'electric' : 'manual', preference: p.get('prefer') === 'short' ? 'short' : 'gentle',
     routeId: (p.get('route') ?? '').slice(0, 120), segmentId: (p.get('segment') ?? '').slice(0, 120),
+    ...(p.get('avoidReports') === '1' ? { avoidReports: true } : {}),
+    ...(['routes', 'conditions', 'slope', 'facilities'].includes(p.get('theme') ?? '') ? { mapTheme: p.get('theme') as NavigationState['mapTheme'] } : {}),
     ...(/^[\w/-]{1,120}$/.test(p.get('place')??'')?{placeId:p.get('place')!}:{}),
     ...(['building','toilet','elevator','water','rest','ramp','landmark'].includes(p.get('category')??'')?{category:p.get('category') as CatalogCategory}:{}),
     ...(Object.values(limits).some(v => v !== null) ? { limits } : {}) }

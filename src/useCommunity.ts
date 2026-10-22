@@ -25,16 +25,19 @@ export function useCommunity(enabled: boolean) {
   const [loading,setLoading] = useState(false)
   const [fetchedAt,setFetchedAt] = useState<string|null>(null)
   const [truncated,setTruncated] = useState(false)
+  const [now,setNow] = useState(Date.now)
   const alive = useRef(false)
   const generation = useRef(0)
   const refresh = useCallback(async () => {
+    setNow(Date.now())
     const call = ++generation.current
     setLoading(true)
     try {
       const [data, identity] = await Promise.all([communityRequest('reports'),communityRequest('session')])
       if (alive.current && call === generation.current) {
         if (!Array.isArray(data.reports)) throw new Error('路況資料格式有誤，請稍後重試。')
-        setReports(data.reports); setSession(identity); setFetchedAt(new Date().toISOString()); setTruncated(!!data.truncated); setError('')
+        const receivedAt=Date.now()
+        setNow(receivedAt);setReports(data.reports); setSession(identity); setFetchedAt(new Date(receivedAt).toISOString()); setTruncated(!!data.truncated); setError('')
       }
     } catch (e) { if (alive.current && call === generation.current) setError(e instanceof Error ? e.message : '社群路況無法載入。') }
     finally { if (alive.current && call === generation.current) setLoading(false) }
@@ -43,12 +46,12 @@ export function useCommunity(enabled: boolean) {
     alive.current=true
     if (!enabled) return ()=>{alive.current=false;generation.current++}
     void refresh()
-    const update=()=>{if(document.visibilityState==='visible' && navigator.onLine) void refresh()}
+    const update=()=>{setNow(Date.now());if(document.visibilityState==='visible' && navigator.onLine) void refresh()}
     const interval=window.setInterval(update,60_000)
     window.addEventListener('online',update); document.addEventListener('visibilitychange',update)
     return ()=>{alive.current=false;generation.current++;clearInterval(interval);window.removeEventListener('online',update);document.removeEventListener('visibilitychange',update)}
   },[enabled,refresh])
-  return {reports,session,error,loading,fetchedAt,truncated,refresh}
+  return {reports,session,error,loading,fetchedAt,truncated,refresh,now}
 }
 export type CommunityData = ReturnType<typeof useCommunity>
 

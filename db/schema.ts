@@ -1,10 +1,11 @@
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const communityReports = sqliteTable('community_reports', {
   id: text('id').primaryKey(), segmentId: text('segment_id').notNull(), category: text('category').notNull(), impact: text('impact').notNull(),
   message: text('message').notNull(), authorName: text('author_name').notNull(), authorKey: text('author_key').notNull(),
   observedAt: text('observed_at').notNull(), createdAt: text('created_at').notNull(), photoKey: text('photo_key'),
   status: text('status').notNull().default('visible'),
+  longitude: real('longitude'), latitude: real('latitude'),
 }, table => [index('reports_segment_created').on(table.segmentId, table.createdAt), index('reports_author_created').on(table.authorKey, table.createdAt)])
 
 export const communityVotes = sqliteTable('community_votes', {
