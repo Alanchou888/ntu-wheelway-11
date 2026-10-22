@@ -1,0 +1,27 @@
+{
+  "version": "2.5.0",
+  "siteVersion": 9,
+  "checkedAt": "2026-10-22T05:56:55.636Z",
+  "publicWrites": false,
+  "checks": [
+    "public update prompt and version activation",
+    "avoidance toggle retained in hash",
+    "two candidates with empty public feed",
+    "slope theme updates map geometry, legend and hash",
+    "theme selection restores layer-button focus",
+    "390px mobile layout has no horizontal overflow",
+    "all four theme buttons have 70px height and remain within viewport",
+    "conditions theme changes legend and collapses mobile sheet",
+    "anonymous public report dialog requires sign-in and contains no test reports",
+    "verified mode still has zero verified routes and provides demo recovery",
+    "returns to route theme and opens segment details",
+    "confirmation route reopens with avoidance and theme settings",
+    "Escape closes theme menu and restores focus",
+    "375px mobile layout has no horizontal overflow"
+  ],
+  "notVerified": [
+    "signed-in point-picker UI",
+    "real-device drag and GPS",
+    "field accessibility conditions"
+  ]
+}

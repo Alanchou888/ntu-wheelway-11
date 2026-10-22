@@ -101,9 +101,14 @@ export default function CampusMap(props: Props) {
     const map = mapRef.current
     if (!map) return
     if(respectDiscovery&&focusPlace())return
+    const current = actions.current
+    if(current.mapTheme==='facilities'&&!current.discoveryActive){
+      const points=current.catalogPlaces?.filter(place=>place.category!=='building'&&place.category!=='landmark')??[]
+      const padding=visiblePadding()
+      if(points.length&&padding.usable){map.fitBounds(L.latLngBounds(points.map(place=>latlng(place.coordinate))),{paddingTopLeft:padding.topLeft,paddingBottomRight:padding.bottomRight,maxZoom:18,animate:false});return}
+    }
     const own=locationActions.current.state
     if(respectLocation&&own.following&&isLiveLocation(own)&&!actions.current.preview?.following&&!actions.current.preview?.playing){focusMyLocation();return}
-    const current = actions.current
     const points = current.routes.flatMap(routeCoordinates)
     const padding = visiblePadding()
     const options = padding.usable ? { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight } : { padding: [35, 40] as L.PointTuple }
@@ -348,6 +353,12 @@ export default function CampusMap(props: Props) {
   },[props.communityFocus,props.layoutKey,props.screen,device.session])
 
   useEffect(() => { refit() }, [geometryKey, props.campus]) // Editing a measurement must not reset the map viewport.
+
+  useEffect(()=>{
+    if(props.discoveryActive)return
+    device.session.setFollowing(false)
+    refit(false)
+  },[theme,props.catalogPlaces,props.discoveryActive,device.session])
 
   useEffect(() => {
     const timer = window.setTimeout(()=>refit(), 240)
