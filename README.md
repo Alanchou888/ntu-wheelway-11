@@ -1,4 +1,4 @@
-# 輪行臺大 WHEELWAY
+# 輪椅友善路徑導航系統
 
 第 11 組輪椅友善路徑導航系統的 Web App 原始碼。依 Proposal-2 與 Project Handout v4 製作，支援「設定條件 → 比較路線 → 檢視路段 → 確認動線」。
 

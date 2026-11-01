@@ -46,10 +46,11 @@ h3 { font-size: 16px; }
 .text-link:hover { color: var(--green-hover); }
 
 /* The primary navigation shares the brand row instead of adding another bar. */
-.topbar { display: grid; grid-template-columns: auto 1fr auto; min-height: 80px; height: auto; gap: 32px; padding: 0 28px; border-color: var(--border); }
-.brand { gap: 11px; min-height: 56px; }
-.brand-symbol { width: 42px; height: 42px; border-radius: 0; background: none; color: var(--green); }
-.brand strong { font-size: 21px; font-weight: 700; letter-spacing: .5px; }
+.topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; min-height: 80px; height: auto; gap: 24px; padding: 0 28px; border-color: var(--border); }
+.brand { gap: 11px; min-height: 56px; min-width: 0; }
+.brand > span:last-child { min-width: 0; }
+.brand-symbol { width: 42px; height: 42px; flex-shrink: 0; border-radius: 0; background: none; color: var(--green); }
+.brand strong { display: block; font-size: 20px; font-weight: 700; letter-spacing: 0; line-height: 1.4; }
 .brand small { font-size: 12px; color: var(--muted); letter-spacing: .2px; margin-top: 1px; }
 .product-nav { justify-content: center; padding: 0; min-height: 80px; gap: 6px; border: 0; background: none; }
 .product-nav button { min-height: 48px; padding: 11px 14px; font-size: 14px; font-weight: 500; gap: 7px; color: var(--muted); border-radius: 6px; }
@@ -374,7 +375,8 @@ h3 { font-size: 16px; }
   .product-nav { gap: 0; }
   .product-nav button { padding: 11px 10px; font-size: 13px; }
   .product-nav button > svg { display: none; }
-  .brand strong { font-size: 19px; }
+  .brand strong { font-size: 17px; }
+  .brand-symbol { width: 32px; }
   .brand small { font-size: 11px; }
   .journey-bar { padding-left: 23px; padding-right: 23px; }
   .step-chevron { margin: 0 11px; }
@@ -389,7 +391,7 @@ h3 { font-size: 16px; }
   .brand { min-height: 64px; gap: 7px; }
   .brand-symbol { width: 32px; height: 38px; }
   .brand-symbol svg { width: 25px; height: 25px; }
-  .brand strong { font-size: 19px; }
+  .brand strong { font-size: 18px; }
   .brand small { display: block; font-size: 11px; letter-spacing: 0; }
   .topbar > .source-button { grid-column: 2; grid-row: 1; font-size: 12px; padding: 8px 9px; }
   .product-nav { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(4, 1fr); min-height: 48px; padding: 0; gap: 0; }
@@ -502,6 +504,8 @@ h3 { font-size: 16px; }
 
 @media (max-width: 370px) {
   .topbar { padding-left: 14px; padding-right: 14px; }
+  .brand-symbol { display: none; }
+  .brand strong { font-size: 17px; }
   .product-nav button { font-size: 11px; gap: 4px; }
   .product-nav button > svg { width: 14px; }
   .mode-strip { padding-left: 16px; padding-right: 16px; font-size: 11px; }
