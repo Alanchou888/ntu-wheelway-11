@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useState} from 'react'
 import {fetchSnapshot} from './data-client'
 import {fallbackPlaces,parsePlaceCatalog} from './places'
+import {withFieldObservations} from './field-observations'
 import type {Campus,PlaceCatalog} from './types'
 
 export function usePlaceCatalog(campus:Campus|null){
@@ -13,6 +14,9 @@ export function usePlaceCatalog(campus:Campus|null){
     fetchSnapshot('/data/places.json',parsePlaceCatalog,controller.signal).then(value=>{if(!controller.signal.aborted)setData(value)}).catch(()=>{if(!controller.signal.aborted)setError(true)}).finally(()=>{if(!controller.signal.aborted)setLoading(false)})
     return()=>controller.abort()
   },[attempt])
-  const catalog=useMemo(()=>data??(campus?fallbackPlaces(campus):null),[data,campus])
+  const catalog=useMemo(()=>{
+    const base=data??(campus?fallbackPlaces(campus):null)
+    return base?withFieldObservations(base):null
+  },[data,campus])
   return{catalog,error,loading,retry:()=>setAttempt(n=>n+1)}
 }

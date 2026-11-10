@@ -98,17 +98,26 @@
 .catalog-place-label{box-shadow:none;color:#36516b;border-color:#bccbd8;font-size:11px;padding:4px 7px;border-radius:5px;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
 .route-workspace[data-discovering='true'] .map-legend{display:none}
 .route-workspace>.layer-popover{z-index:950}
+.catalog-map-marker.field-marker > span { border-color: #0e766a; color: #0e6259; background: #effcf8; }
+.catalog-map-marker.field-marker.selected > span { color: #fff; background: #0e766a; }
+.place-category-icon.field { color: #0e6259; background: #e2f4ee; }
+.place-card-actions.field-actions { display: flex; margin: 12px 0; }
+.field-actions .place-share { min-height: 44px; padding: 0 14px; }
+.field-facts dd { line-height: 1.7; }
+.field-video video { width: 100%; max-height: 300px; border-radius: 8px; background: #172329; }
+.field-video p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
 @media(max-width:760px),(max-height:540px) and (max-width:1000px){
   .app.map-experience .product-nav{grid-template-columns:repeat(5,minmax(0,1fr))}
   .discovery-tools{inset:12px 12px auto;display:block}
   .place-search{width:100%;max-width:none}
   .place-search-field{height:48px;border-radius:9px}
   .place-search-field input{font-size:16px;height:44px}
-  .place-category-strip{margin-top:7px;padding:3px 2px 7px;gap:6px;scrollbar-width:none}
+  .place-category-strip{margin-top:7px;padding:3px 2px 7px;gap:8px;scrollbar-width:none}
   .place-category-strip::-webkit-scrollbar{display:none}
   .place-category-strip button{padding:0 12px;font-size:11px}
   .place-suggestions{top:56px;max-height:calc(100dvh - 305px);z-index:2}
-  .app.map-experience .route-workspace.has-discovery>.map-sheet{top:auto;height:49%;max-height:calc(100% - 126px);min-height:190px}
+  .app.map-experience .route-workspace.has-discovery>.map-sheet{top:auto;bottom:18px;height:66%;max-height:calc(100% - 126px);min-height:0}
   .app.map-experience .route-workspace.has-discovery>.map-sheet[data-size='full']{height:calc(100% - 126px)}
   .app.map-experience .route-workspace.has-discovery>.map-sheet[data-size='map']{height:auto;min-height:0}
   .route-workspace.has-discovery .map-actions{top:120px;right:12px;flex-direction:row;gap:7px}
@@ -120,6 +129,42 @@
   .place-card-symbol{margin:4px 0 13px}
   .place-card-actions{grid-template-columns:1fr 1.1fr 50px;gap:5px}
   .place-card-actions .button{font-size:12px;padding:0 5px}
+}
+@media (max-width: 760px) and (orientation: portrait) {
+  .app.map-experience { min-height: 720px; }
+  .map-experience .map-sheet .panel-main { padding-inline: 16px; }
+  .map-experience .map-sheet .setup-actions { padding: 9px 16px; }
+  .map-experience .map-sheet .setup-actions .form-footnote { display: none; }
+  .map-experience .sheet-size-buttons { gap: 8px; }
+  .map-experience .route-workspace[data-screen='setup'][data-discovering='false'] .panel-intro { display: none; }
+  .map-experience .route-workspace[data-screen='setup'][data-discovering='false'] .route-form { margin-top: 7px; }
+  .map-experience .route-workspace[data-screen='setup'][data-discovering='false'] .location-field { min-height: 60px; }
+  .map-experience .route-workspace[data-screen='setup'] .field-content { padding-block: 2px; }
+  .map-experience .route-workspace[data-screen='setup'] .field-content select { min-height: 44px; }
+  .map-experience .route-workspace[data-screen='setup'] .location-connector { top: 31px; height: 62px; }
+  .map-experience .route-workspace[data-screen='setup'] .swap-button { top: 50%; transform: translateY(-50%); }
+  .app.map-experience .route-workspace.has-discovery[data-screen='setup'][data-discovering='false'] > .map-sheet[data-size='half'] {
+    height: 69%;
+  }
+  .route-workspace[data-screen='setup'][data-discovering='false'] .map-sheet[data-size='half'] #panel-heading {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .map-experience .route-workspace[data-screen='setup'][data-discovering='false'] .map-sheet[data-size='half'] .panel-main {
+    padding-top: 3px;
+  }
+  .app.map-experience .route-workspace.has-discovery[data-discovering='false'] > .map-sheet[data-size='full'] {
+    height: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+  }
+  .route-workspace[data-discovering='false'][data-sheet='full'] > .discovery-tools,
+  .route-workspace[data-discovering='false'][data-sheet='full'] .map-actions { display: none; }
 }
 @media(prefers-reduced-motion:reduce){.catalog-map-marker{transition:none}}
 @media print{.discovery-tools,.place-card,.place-results{display:none!important}}

@@ -1,7 +1,7 @@
 import type {Campus,CatalogCategory,CatalogPlace,NavigationState,PlaceCatalog} from './types'
 import {distance} from './routes'
 
-export const categoryLabels:Record<CatalogCategory,string>={building:'建物',toilet:'廁所',elevator:'電梯',water:'飲水',rest:'休息',ramp:'坡道',landmark:'地標'}
+export const categoryLabels:Record<CatalogCategory,string>={building:'建物',toilet:'廁所',elevator:'電梯',water:'飲水',rest:'休息',ramp:'坡道',landmark:'地標',field:'實勘點'}
 export const catalogCategories=Object.keys(categoryLabels) as CatalogCategory[]
 const canonical=(value:string)=>value.normalize('NFKC').toLocaleLowerCase('en').replaceAll('臺','台').replace(/[\s\p{P}]/gu,'')
 export function parsePlaceCatalog(value:unknown):PlaceCatalog{

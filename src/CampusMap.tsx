@@ -289,8 +289,8 @@ export default function CampusMap(props: Props) {
     const shown=props.catalogPlaces.filter(p=>p.id===props.selectedPlaceId||(bounds?.contains(latlng(p.coordinate))&&(filtered?catalogMatches.some(match=>match.id===p.id):theme==='facilities'?p.category!=='building'&&p.category!=='landmark':!!p.routePlaceId||showFacilities&&p.category==='ramp'||zoom>=17&&p.category==='landmark'||zoom>=19&&p.category==='building')))
     for(const place of shown){
       const active=place.id===props.selectedPlaceId
-      const element=document.createElement('span');element.textContent=({building:'館',toilet:'廁',elevator:'梯',water:'水',rest:'休',ramp:'坡',landmark:'景'} as const)[place.category]
-      const icon=L.divIcon({className:`catalog-map-marker ${active?'selected':''}`,html:element,iconSize:[44,44],iconAnchor:[22,22]})
+      const element=document.createElement('span');element.textContent=({building:'館',toilet:'廁',elevator:'梯',water:'水',rest:'休',ramp:'坡',landmark:'景',field:'勘'} as const)[place.category]
+      const icon=L.divIcon({className:`catalog-map-marker ${place.category==='field'?'field-marker':''} ${active?'selected':''}`,html:element,iconSize:[44,44],iconAnchor:[22,22]})
       const label=document.createElement('span');label.textContent=place.name
       const marker=L.marker(latlng(place.coordinate),{icon,keyboard:true,title:place.name,zIndexOffset:active?850:100,bubblingMouseEvents:false}).bindTooltip(label,{permanent:active,direction:'top',offset:[0,-18],className:'catalog-place-label'}).addTo(group)
       marker.on('click',()=>actions.current.onSelectPlace?.(place.id))

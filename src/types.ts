@@ -1,7 +1,7 @@
 import type { FeatureCollection } from 'geojson'
 
 export type Coordinate = [number, number]
-export type CatalogCategory = 'building' | 'toilet' | 'elevator' | 'water' | 'rest' | 'ramp' | 'landmark'
+export type CatalogCategory = 'building' | 'toilet' | 'elevator' | 'water' | 'rest' | 'ramp' | 'landmark' | 'field'
 export interface CatalogPlace {
   id: string; name: string; aliases: string[]; category: CatalogCategory; coordinate: Coordinate
   sourceId: string; sourceUrl: string; retrievedAt: string; verifiedAt: null

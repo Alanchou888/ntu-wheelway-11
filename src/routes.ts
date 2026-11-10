@@ -163,7 +163,7 @@ export function fromHash(hash: string): NavigationState {
     ...(p.get('avoidReports') === '1' ? { avoidReports: true } : {}),
     ...(['routes', 'conditions', 'slope', 'facilities'].includes(p.get('theme') ?? '') ? { mapTheme: p.get('theme') as NavigationState['mapTheme'] } : {}),
     ...(/^[\w/-]{1,120}$/.test(p.get('place')??'')?{placeId:p.get('place')!}:{}),
-    ...(['building','toilet','elevator','water','rest','ramp','landmark'].includes(p.get('category')??'')?{category:p.get('category') as CatalogCategory}:{}),
+    ...(['building','toilet','elevator','water','rest','ramp','landmark','field'].includes(p.get('category')??'')?{category:p.get('category') as CatalogCategory}:{}),
     ...(Object.values(limits).some(v => v !== null) ? { limits } : {}) }
 }
 
