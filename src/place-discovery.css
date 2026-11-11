@@ -104,6 +104,9 @@
 .place-card-actions.field-actions { display: flex; margin: 12px 0; }
 .field-actions .place-share { min-height: 44px; padding: 0 14px; }
 .field-facts dd { line-height: 1.7; }
+.place-field-trip { margin: 0 0 14px; padding: 0 12px 4px; border: 1px solid #b6c4cf; border-radius: 8px; }
+.place-field-trip summary { min-height: 44px; padding: 11px 0; cursor: pointer; color: var(--green); font-weight: 600; }
+.place-field-trip p { margin: 0 0 10px; font-size: 13px; line-height: 1.7; }
 .field-video video { width: 100%; max-height: 300px; border-radius: 8px; background: #172329; }
 .field-video p { color: var(--muted); font-size: 13px; line-height: 1.6; }
 
