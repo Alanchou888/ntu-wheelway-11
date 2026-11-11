@@ -1,11 +1,12 @@
 import { communityApi } from './community'
 import type { CommunityEnv } from './community'
 import { buildDemoRoutes } from '../src/routes'
+import { buildWalkedRoutes } from '../src/walked-routes'
 import campus from '../public/data/campus.json'
 import survey from '../public/data/surveyed-routes.json'
 import type { Campus, SurveyData } from '../src/types'
 
-const segments = [...buildDemoRoutes(campus as unknown as Campus),...(survey as SurveyData).routes].flatMap(route => route.segments)
+const segments = [...buildWalkedRoutes(), ...buildDemoRoutes(campus as unknown as Campus), ...(survey as SurveyData).routes].flatMap(route => route.segments)
 const ids = new Set(segments.map(segment => segment.id))
 const lines = new Map(segments.map(segment => [segment.id, segment.coordinates]))
 interface Env extends CommunityEnv { ASSETS: { fetch(request: Request): Promise<Response> } }

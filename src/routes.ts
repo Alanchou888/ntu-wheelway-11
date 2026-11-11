@@ -108,6 +108,10 @@ function hasEvidence(item: Entrance | Segment): boolean {
 }
 function verifiedEntrance(entrance: Entrance): boolean { return hasEvidence(entrance) && entrance.coordinate.length === 2 && entrance.coordinate.every(Number.isFinite) && Math.abs(entrance.coordinate[0]) <= 180 && Math.abs(entrance.coordinate[1]) <= 90 }
 export function isEligible(route: Route, mode: Mode): boolean {
+  if (route.kind === 'demo' && route.walked) {
+    return mode === 'demo' && route.segments.length > 0 &&
+      route.segments.every(segment => validLine(segment.coordinates) && !segment.closed && segment.status !== 'blocked')
+  }
   if (!route.segments.length || !route.segments.every(s => validLine(s.coordinates) && !s.closed && s.hasStairs === false && s.status !== 'blocked')) return false
   // Unknown data and demo flags never promote a route into the surveyed collection.
   if (mode === 'demo') return route.kind === 'demo' && route.originEntrance.status === 'demo' && route.destinationEntrance.status === 'demo' && route.segments.every(s => s.status === 'demo')

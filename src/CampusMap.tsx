@@ -28,7 +28,7 @@ interface Props {
   communityFocus?:{coordinate:Coordinate;request:number}
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
-export const colors = { gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
+export const colors = { 'walk-out': '#205db6', 'walk-back': '#985a23', gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
 
 export default function CampusMap(props: Props) {
   const device = useDeviceLocation(props.locationSession)
@@ -181,10 +181,13 @@ export default function CampusMap(props: Props) {
     props.routes.forEach(route => {
       const isSelected = route.id === props.selectedId
       const color = theme==='slope'||theme==='conditions' ? '#718096' : props.mode === 'survey' ? '#82918a' : colors[route.id as keyof typeof colors] ?? colors.survey
-      const points = routeCoordinates(route).map(latlng)
+      const spans = route.walked ? route.segments : [{ coordinates: routeCoordinates(route), approximate: false }]
+      for (const span of spans) {
+      const points = span.coordinates.map(latlng)
       L.polyline(points, { color: '#ffffff', weight: isSelected ? 10 : 8, opacity: focus && !isSelected ? .4 : .9, interactive: false, lineCap: 'round' }).addTo(group)
-      const line = L.polyline(points, { color, weight: isSelected ? 5.5 : 4, opacity: focus && !isSelected ? .22 : isSelected ? 1 : .78, dashArray: route.id === 'direct' ? '8 7' : undefined })
-      line.on('click', () => actions.current.onSelectRoute(route.id)).addTo(group)
+      const line = L.polyline(points, { color, weight: isSelected ? 5.5 : 4, opacity: focus && !isSelected ? .22 : isSelected ? 1 : .78, dashArray: span.approximate ? '2 7' : ['direct', 'walk-back'].includes(route.id) ? '8 7' : undefined })
+      line.bindTooltip(span.approximate ? '博雅館內約略走向' : route.name).on('click', () => actions.current.onSelectRoute(route.id)).addTo(group)
+      }
       if(theme==='slope'||theme==='conditions')route.segments.forEach(segment=>{
         const reports=(props.communityReports??[]).filter(r=>reportMatchesSegment(r,segment,props.communitySegments))
         const active=reports.filter(r=>reportState(r).kind==='active')
@@ -196,7 +199,7 @@ export default function CampusMap(props: Props) {
       if (theme==='routes' && isSelected && (props.screen === 'detail' || props.screen === 'editor')) {
         route.segments.forEach(segment => {
           const active = segment.id === props.segmentId
-          L.polyline(segment.coordinates.map(latlng), { color: active ? '#e09c37' : color, weight: active ? 8 : 5, opacity: 1 })
+          L.polyline(segment.coordinates.map(latlng), { color: active ? '#e09c37' : color, weight: active ? 8 : 5, opacity: 1, dashArray: segment.approximate ? '2 7' : undefined })
             .on('click', () => actions.current.onSelectSegment(segment.id)).addTo(group)
           if (active) L.circleMarker(latlng(segment.coordinates[0]), { radius: 6, color: '#fff', weight: 2, fillColor: '#d18b21', fillOpacity: 1 }).addTo(group)
         })
@@ -231,7 +234,7 @@ export default function CampusMap(props: Props) {
       ;[selected.originEntrance, selected.destinationEntrance].forEach((entrance, i) => {
         const icon = L.divIcon({ className: 'endpoint-marker', html: `<span class="endpoint-dot ${i ? 'destination' : ''}">${i ? 'B' : 'A'}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] })
         const label = document.createElement('span')
-        label.textContent = `${entrance.placeId === 'library' ? '總圖書館' : '博雅教學館'}${props.mode === 'demo' ? ' · 示範入口' : ' · 入口'}`
+        label.textContent = entrance.name
         L.marker(latlng(entrance.coordinate), { icon, keyboard: false }).bindTooltip(label, { permanent: true, direction: i ? 'top' : 'bottom', offset: [0, i ? -17 : 17], className: 'entrance-label' }).addTo(group)
       })
     } else {
@@ -425,7 +428,7 @@ export default function CampusMap(props: Props) {
     </div>,rootRef.current?.closest('.route-workspace')??document.body)}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
     <div className={`map-legend ${theme!=='routes'?'theme-legend':''}`} aria-live="polite">
-      {theme!=='routes'?<ThemeLegend theme={theme} mode={props.mode}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />較平緩</span><span><i className="legend-line direct" />距離較短</span></> : <span><MapPin size={15} />已查核動線</span>}
+      {theme!=='routes'?<ThemeLegend theme={theme} mode={props.mode}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />去程</span><span><i className="legend-line direct" />回程</span><span>點線：館內約略走向</span></> : <span><MapPin size={15} />已查核動線</span>}
     </div>
     <div className="map-north" aria-hidden="true"><span>↑</span>N</div>
   </section>

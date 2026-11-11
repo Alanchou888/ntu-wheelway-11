@@ -29,10 +29,10 @@ export interface Segment {
   maxSlopePercent: number | null; minWidthM: number | null; stepHeightCm: number | null
   hasStairs: boolean | null; surface: string | null; rampLengthM: number | null
   closed: boolean | null; obstacles: string[]; photos: Photo[]; source: string
-  sourceUrl?: string; retrievedAt: string | null; verifiedAt: string | null
+  sourceUrl?: string; retrievedAt: string | null; verifiedAt: string | null; approximate?: boolean
 }
 export interface Route {
-  id: string; name: string; description: string; kind: 'demo' | 'survey'
+  id: string; name: string; description: string; kind: 'demo' | 'survey'; walked?: true
   originEntrance: Entrance; destinationEntrance: Entrance; segments: Segment[]
 }
 export interface SurveyData { version: number; routes: Route[] }
