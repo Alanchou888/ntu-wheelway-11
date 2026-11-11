@@ -20,7 +20,10 @@
 .walked-route-picker button strong { display: flex; align-items: baseline; gap: 6px; font-size: 15px; }
 .walked-route-picker button small, .walked-route-picker button > span > span { font-size: 11px; color: var(--muted); font-weight: 500; }
 .walked-route-picker button > span > span { display: block; margin-top: 2px; line-height: 1.4; }
+.walked-route-pair { margin-bottom: 14px; }
+.route-cards .walked-route-card { padding-block: 12px; }
 .walked-route-card .walked-route-distance { font-size: 12px; color: var(--ink); font-weight: 600; }
+.walked-route-open { align-self: center; flex-shrink: 0; margin-left: auto; color: var(--green); }
 .map-sheet .walked-segment-info { padding-top: 10px; }
 .segment-field-links { margin: 12px 0 16px; }
 .segment-field-links p, .segment-no-points { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 10px 0 6px; }

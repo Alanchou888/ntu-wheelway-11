@@ -355,9 +355,29 @@ export default function App() {
           {state.screen !== 'setup' && !isDemo && surveyLoading ? <div className="empty-state" role="status"><LoaderCircle className="spinner" size={27} /><h1 id="panel-heading" tabIndex={-1}>正在載入查核資料</h1><p>公開地圖已可使用，查核資料載入後會再檢查路線資格。</p></div> : state.screen !== 'setup' && resolved.problem ? <UnavailableRoute problem={resolved.problem} onCompare={() => navigate({ screen: 'compare', routeId: '', segmentId: '' })} onRoute={() => navigate({ screen: 'detail', segmentId: selected?.segments[0]?.id ?? '' })} /> : state.screen !== 'setup' && routes.length === 0 && <EmptyRoutes onDemo={() => navigate({ mode: 'demo', screen: 'compare', routeId: '', segmentId: '', limits: undefined })} onSetup={() => navigate({ screen: 'setup' })} onRetry={retrySurvey} failed={surveyError && !isDemo} filtered={candidates.excluded.length > 0} />}
 
           {state.screen === 'compare' && routes.length > 0 && (isDemo || !surveyLoading) && <>
-            <div className="panel-title-row"><h1 id="panel-heading" tabIndex={-1}>比較路線</h1><button className="back-link" onClick={() => navigate({ screen: 'setup' })}><SlidersHorizontal size={16} aria-hidden="true" />修改條件</button></div>{isDemo ? <p className="route-pair">總圖前廣場 ⇄ 博雅教學館西側</p> : <p className="route-pair"><span>{placeNames[state.origin]}</span><ArrowRight size={16} aria-hidden="true" /><span>{placeNames[destination]}</span></p>}
-            <div className="compare-preference"><span>{routes.length} 條{isDemo ? '試走' : ''}路線</span><span>{state.wheelchair === 'manual' ? '手動輪椅' : '電動輪椅'}</span>{!isDemo && <span>{state.preference === 'gentle' ? '依坡度排序' : '依距離排序'}</span>}</div>
-            <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'walk-back' ? 'direct' : 'gentle'} ${route.walked ? 'walked-route-card' : ''} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Mountain size={20} aria-hidden="true" /> : <RouteIcon size={20} aria-hidden="true" />}</span><div><strong>{route.name}</strong><span>{route.description}</span>{route.walked && <small className="walked-route-distance">圖上約 {formatDistance(metrics(route).distanceM)} · {route.segments.length} 段</small>}</div>{i === 0 && !isDemo && <span className="preference-tag">符合偏好</span>}</div>{!route.walked && <RouteStats route={route} />}{(()=>{const relevant=routeReports(route,community.reports,communitySegments);const summary=communitySummary(relevant,new Set(relevant.map(r=>r.segmentId)),community.now);return summary.total>0?<p className="community-route-note"><MessageSquare size={14}/><span>社群路況 {summary.total} 則，其中 {summary.recent} 則近期回報{summary.blocked>0?'，含通行受阻回報':''}。查看路段了解現場資訊。</span></p>:null})()}{!route.walked && <div className="route-card-surface"><span>{isDemo ? '通行條件待查核' : '無階梯'}</span><span>{metrics(route).surfaces.join('、')}</span></div>}{route.kind === 'survey' && <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>}<div className="route-card-footer"><span>{isDemo ? '通行條件待查核' : '全程及入口已查核'}</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div></button>)}</div>
+            <div className="panel-title-row"><h1 id="panel-heading" tabIndex={-1}>比較路線</h1><button className="back-link" onClick={() => navigate({ screen: 'setup' })}><SlidersHorizontal size={16} aria-hidden="true" />修改條件</button></div>{isDemo ? <p className="route-pair walked-route-pair">總圖前廣場 ⇄ 博雅教學館西側</p> : <p className="route-pair"><span>{placeNames[state.origin]}</span><ArrowRight size={16} aria-hidden="true" /><span>{placeNames[destination]}</span></p>}
+            {!isDemo && <div className="compare-preference"><span>{routes.length} 條路線</span><span>{state.wheelchair === 'manual' ? '手動輪椅' : '電動輪椅'}</span><span>{state.preference === 'gentle' ? '依坡度排序' : '依距離排序'}</span></div>}
+            <div className="route-cards">{routes.map((route, i) => {
+              const routeMetrics = metrics(route)
+              const relevant = routeReports(route, community.reports, communitySegments)
+              const summary = communitySummary(relevant, new Set(relevant.map(report => report.segmentId)), community.now)
+              return <button key={route.id} className={`route-card ${route.id === 'walk-back' ? 'direct' : 'gentle'} ${route.walked ? 'walked-route-card' : ''} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}>
+                <div className="route-card-top">
+                  <span className="route-card-icon"><RouteIcon size={20} aria-hidden="true" /></span>
+                  <div><strong>{route.name}</strong><span>{route.description}</span>
+                    {route.walked && <small className="walked-route-distance">圖上約 {formatDistance(routeMetrics.distanceM)} · {route.segments.length} 段</small>}
+                  </div>
+                  {route.walked ? <ChevronRight className="walked-route-open" size={18} aria-hidden="true" /> : i === 0 && <span className="preference-tag">符合偏好</span>}
+                </div>
+                {!route.walked && <RouteStats route={route} />}
+                {summary.total > 0 && <p className="community-route-note"><MessageSquare size={14}/><span>社群路況 {summary.total} 則，其中 {summary.recent} 則近期回報{summary.blocked > 0 ? '，含通行受阻回報' : ''}。查看路段了解現場資訊。</span></p>}
+                {!route.walked && <>
+                  <div className="route-card-surface"><span>無階梯</span><span>{routeMetrics.surfaces.join('、')}</span></div>
+                  <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>
+                  <div className="route-card-footer"><span>全程及入口已查核</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div>
+                </>}
+              </button>
+            })}</div>
             <ConditionControls enabled={!!state.avoidReports} onChange={avoidReports => navigate({ avoidReports, routeId: '', segmentId: '' })} community={community} />
             {!isDemo && <ComparisonSummary routes={routes} />}
           </>}
