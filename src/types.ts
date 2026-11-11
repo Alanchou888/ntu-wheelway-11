@@ -30,6 +30,7 @@ export interface Segment {
   hasStairs: boolean | null; surface: string | null; rampLengthM: number | null
   closed: boolean | null; obstacles: string[]; photos: Photo[]; source: string
   sourceUrl?: string; retrievedAt: string | null; verifiedAt: string | null; approximate?: boolean
+  fieldPointIds?: string[]
 }
 export interface Route {
   id: string; name: string; description: string; kind: 'demo' | 'survey'; walked?: true

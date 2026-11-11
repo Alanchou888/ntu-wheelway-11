@@ -13,6 +13,7 @@ import LocationControls from './LocationControls'
 import {categoryLabels,findPlaces} from './places'
 import { reportMatchesSegment, slopeStyle } from './road-conditions'
 import { mapThemes, ThemeChooser, ThemeLegend } from './MapThemes'
+import { groupFieldMarkers } from './field-marker-groups'
 
 interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
@@ -24,10 +25,12 @@ interface Props {
   onLocationActivity?:()=>void; locationSession?:DeviceLocationSession
   catalogPlaces?:CatalogPlace[];catalogCategory?:CatalogCategory;catalogQuery?:string;selectedPlaceId?:string;discoveryActive?:boolean
   onSelectPlace?:(id:string)=>void;onReturnRoutes?:()=>void
+  fieldGroupIds?: string[]; onSelectFieldGroup?: (ids: string[]) => void
   mapTheme?:MapTheme;onThemeChange?:(theme:MapTheme)=>void
   communityFocus?:{coordinate:Coordinate;request:number}
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
+const fieldGroupIncludes = (place: CatalogPlace, ids?: string[]) => !ids || ids.includes(place.id)
 export const colors = { 'walk-out': '#205db6', 'walk-back': '#985a23', gentle: '#205db6', direct: '#985a23', survey: '#205db6' }
 
 export default function CampusMap(props: Props) {
@@ -60,7 +63,10 @@ export default function CampusMap(props: Props) {
   const [viewRevision,setViewRevision]=useState(0)
   const theme=props.mapTheme??'routes'
   const showFacilities=theme==='facilities'||(theme==='routes'&&showRamps)
-  const catalogMatches=useMemo(()=>props.catalogPlaces?findPlaces(props.catalogPlaces,props.catalogQuery,props.catalogCategory):[],[props.catalogPlaces,props.catalogQuery,props.catalogCategory])
+  const catalogMatches=useMemo(() => {
+    const matches = props.catalogPlaces ? findPlaces(props.catalogPlaces, props.catalogQuery, props.catalogCategory) : []
+    return matches.filter(place => fieldGroupIncludes(place, props.fieldGroupIds))
+  },[props.catalogPlaces,props.catalogQuery,props.catalogCategory,props.fieldGroupIds])
   const showWalkedPoints = props.mode === 'demo' && props.routes.some(route => route.walked)
   const viewingFieldPoints = props.catalogCategory === 'field' ||
     props.catalogPlaces?.some(place => place.id === props.selectedPlaceId && place.category === 'field')
@@ -94,6 +100,7 @@ export default function CampusMap(props: Props) {
     if(!map||!current.discoveryActive||!current.catalogPlaces)return false
     const place=current.catalogPlaces.find(p=>p.id===current.selectedPlaceId)
     const points=place?[place]:findPlaces(current.catalogPlaces,current.catalogQuery,current.catalogCategory)
+      .filter(point => fieldGroupIncludes(point, current.fieldGroupIds))
     if(!points.length)return false
     const padding=visiblePadding()
     if(!padding.usable)return false
@@ -283,7 +290,8 @@ export default function CampusMap(props: Props) {
 
   useEffect(()=>{
     const group=placesRef.current
-    if(!group)return
+    const map=mapRef.current
+    if(!group||!map)return
     group.clearLayers()
     if(!props.catalogPlaces)return
     const selected=props.catalogPlaces.find(p=>p.id===props.selectedPlaceId)
@@ -292,17 +300,51 @@ export default function CampusMap(props: Props) {
       if(feature)L.geoJSON(feature,{interactive:false,style:{color:'#205db6',weight:2,fillColor:'#5798e2',fillOpacity:.17}}).addTo(group)
     }
     const filtered=!!props.catalogCategory||!!props.catalogQuery?.trim()
-    const bounds=mapRef.current?.getBounds().pad(.05)
+    const bounds=map.getBounds().pad(.05)
     const shown = props.catalogPlaces.filter(place => {
       if (place.id === props.selectedPlaceId) return true
-      if (!bounds?.contains(latlng(place.coordinate))) return false
+      if (!bounds.contains(latlng(place.coordinate))) return false
       if (filtered) return catalogMatches.some(match => match.id === place.id)
       if (showWalkedPoints && place.category === 'field') return true
       if (theme === 'facilities') return place.category !== 'building' && place.category !== 'landmark'
       return !!place.routePlaceId || showFacilities && place.category === 'ramp' ||
         zoom >= 17 && place.category === 'landmark' || zoom >= 19 && place.category === 'building'
     })
+    const clusterable = props.onSelectFieldGroup
+      ? shown.filter(place => place.category === 'field' && place.id !== props.selectedPlaceId)
+      : []
+    const groups = groupFieldMarkers(clusterable, coordinate => map.latLngToLayerPoint(latlng(coordinate)))
+    const groupedIds = new Set<string>()
+    for (const members of groups) {
+      if (members.length < 2) continue
+      const center = L.point(0, 0)
+      for (const place of members) {
+        const pixel = map.latLngToLayerPoint(latlng(place.coordinate))
+        center.x += pixel.x / members.length
+        center.y += pixel.y / members.length
+      }
+      const label = `查看附近 ${members.length} 個實勘點`
+      const icon = L.divIcon({
+        className: 'catalog-map-marker field-cluster', html: `<span aria-hidden="true">${members.length}</span>`,
+        iconSize: [44, 44], iconAnchor: [22, 22],
+      })
+      const marker = L.marker(map.layerPointToLatLng(center), { icon, keyboard: true, title: label, zIndexOffset: 270, bubblingMouseEvents: false }).addTo(group)
+      const ids = members.map(place => place.id)
+      ids.forEach(id => groupedIds.add(id))
+      const open = () => actions.current.onSelectFieldGroup?.(ids)
+      marker.on('click', open)
+      const target = marker.getElement()
+      target?.setAttribute('aria-label', label)
+      if (target) L.DomEvent.on(target, 'keydown', event => {
+        const key = (event as KeyboardEvent).key
+        if (key === 'Enter' || key === ' ') {
+          L.DomEvent.preventDefault(event)
+          open()
+        }
+      })
+    }
     for(const place of shown){
+      if (groupedIds.has(place.id)) continue
       const active=place.id===props.selectedPlaceId
       const element=document.createElement('span');element.textContent=({building:'館',toilet:'廁',elevator:'梯',water:'水',rest:'休',ramp:'坡',landmark:'景',field:'勘'} as const)[place.category]
       const icon=L.divIcon({className:`catalog-map-marker ${place.category==='field'?'field-marker':''} ${active?'selected':''}`,html:element,iconSize:[44,44],iconAnchor:[22,22]})

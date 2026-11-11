@@ -100,12 +100,28 @@
 .route-workspace>.layer-popover{z-index:950}
 .catalog-map-marker.field-marker > span { border-color: #0e766a; color: #0e6259; background: #effcf8; }
 .catalog-map-marker.field-marker.selected > span { color: #fff; background: #0e766a; }
+.catalog-map-marker.field-cluster > span { width: 34px; height: 34px; border: 2px solid white; border-radius: 50%; background: #0d6559; color: #fff; box-shadow: 0 0 0 1px #0d6559, 0 2px 6px #172e3859; font-size: 14px; }
+.catalog-map-marker.field-cluster:hover > span, .catalog-map-marker.field-cluster:focus-visible > span { background: #084e45; box-shadow: 0 0 0 3px #0d6559; }
 .legend-field-point { display: grid; place-items: center; width: 19px; height: 20px; border: 1px solid #0e766a; border-radius: 6px; color: #0e6259; background: #effcf8; font-size: 10px; font-style: normal; }
 .place-category-icon.field { color: #0e6259; background: #e2f4ee; }
-.place-card-actions.field-actions { display: flex; margin: 12px 0; }
-.field-actions .place-share { min-height: 44px; padding: 0 14px; }
-.field-facts dd { line-height: 1.7; }
-.place-field-trip { margin: 0 0 14px; padding: 0 12px 4px; border: 1px solid #b6c4cf; border-radius: 8px; }
+.field-card .place-card-top { margin-bottom: 6px; }
+.field-share { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 8px; background: #fff; color: var(--green); font-size: 13px; }
+.field-share:hover { background: var(--selected); }
+.field-card-date { display: flex; align-items: center; gap: 6px; color: #48675f; font-size: 12px; margin: 0 0 4px; }
+.field-observation-note { color: var(--ink); font-size: 14px; line-height: 1.75; margin: 8px 0 14px; }
+.field-readings { margin: 12px 0 16px; border: 1px solid #c6dcd5; border-radius: 8px; padding: 0 12px; background: #f3faf7; }
+.field-readings > div { padding: 9px 0; }
+.field-readings:has(> div + div) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.field-readings > div + div { padding-left: 12px; border-left: 1px solid #c6dcd5; }
+.field-readings dt { font-size: 12px; color: #48675f; }
+.field-readings dd { margin: 2px 0 0; }
+.field-readings dd strong { color: #155d52; font-size: 21px; font-variant-numeric: tabular-nums; }
+.field-readings dd span { display: block; color: #31554d; font-size: 12px; line-height: 1.65; }
+.field-show-all { margin-top: 12px; }
+.field-source { margin-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.75; }
+.field-source summary { min-height: 44px; padding: 11px 0; cursor: pointer; color: var(--green); font-weight: 600; }
+.field-source p + p { margin-top: 7px; }
+.place-field-trip { margin: 16px 0 14px; padding: 0 12px 4px; border: 1px solid #b6c4cf; border-radius: 8px; }
 .place-field-trip summary { min-height: 44px; padding: 11px 0; cursor: pointer; color: var(--green); font-weight: 600; }
 .place-field-trip p { margin: 0 0 10px; font-size: 13px; line-height: 1.7; }
 .field-video video { width: 100%; max-height: 300px; border-radius: 8px; background: #172329; }
@@ -123,6 +139,11 @@
   .place-suggestions{top:56px;max-height:calc(100dvh - 305px);z-index:2}
   .app.map-experience .route-workspace.has-discovery>.map-sheet{top:auto;bottom:18px;height:66%;max-height:calc(100% - 126px);min-height:0}
   .app.map-experience .route-workspace.has-discovery>.map-sheet[data-size='full']{height:calc(100% - 126px)}
+  .app.map-experience .route-workspace.has-discovery:has(.field-card)>.map-sheet[data-size='full']{
+    height:calc(100% - 24px);max-height:calc(100% - 24px)
+  }
+  .route-workspace[data-sheet='full']:has(.field-card) > .discovery-tools,
+  .route-workspace[data-sheet='full']:has(.field-card) .map-actions{display:none}
   .app.map-experience .route-workspace.has-discovery>.map-sheet[data-size='map']{height:auto;min-height:0}
   .route-workspace.has-discovery .map-actions{top:120px;right:12px;flex-direction:row;gap:7px}
   .route-workspace.has-discovery .location-status-chip{top:0;right:156px;max-width:calc(100vw - 186px);white-space:normal}
@@ -136,6 +157,7 @@
 }
 @media (max-width: 760px) and (orientation: portrait) {
   .app.map-experience { min-height: 720px; }
+  .app.map-experience:has(.route-workspace[data-screen='compare'][data-sheet='map']) { min-height: 640px; }
   .map-experience .map-sheet .panel-main { padding-inline: 16px; }
   .map-experience .map-sheet .setup-actions { padding: 9px 16px; }
   .map-experience .map-sheet .setup-actions .form-footnote { display: none; }

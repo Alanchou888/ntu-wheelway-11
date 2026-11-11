@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Accessibility, ArrowDownUp, ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Copy, Footprints, Info, LoaderCircle, MessageSquare, Mountain, Printer, Route as RouteIcon, ShieldCheck, SlidersHorizontal, TriangleAlert, X, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import CampusMap from './CampusMap'
+import CampusMap, { colors } from './CampusMap'
 import type { Campus, CatalogCategory, CatalogPlace, Coordinate, Entrance, Mode, NavigationState, Route, Screen, Segment } from './types'
 import { buildWalkedRoutes } from './walked-routes'
 import { formatDate, formatDistance, fromHash, lineDistance, lineMidpoint, metrics, placeNames, reverseRoute, segmentLabel, toHash } from './routes'
@@ -23,6 +23,7 @@ import { communitySummary } from './community-model'
 import {usePlaceCatalog} from './usePlaceCatalog'
 import {categoryLabels,clearRecentPlaces,findPlaces,placeEndpointPatch,readRecentPlaces,rememberPlace} from './places'
 import {CatalogStatus,PlaceCard,PlaceList,PlaceSearch} from './PlaceDiscovery'
+import { fieldObservation } from './field-observations'
 import './product.css'
 import './campus-design.css'
 import './route-experience.css'
@@ -39,6 +40,26 @@ const screens: { id: Screen; label: string; icon: LucideIcon }[] = [
   { id: 'confirm', label: '確認動線', icon: CheckCircle2 },
 ]
 const metricValue = (n: number | null, suffix: string) => n === null ? '尚無資料' : `${Number(n.toFixed(1))}${suffix}`
+
+function defaultSheetSize(state: NavigationState): SheetSize {
+  if (state.category === 'field' || state.placeId?.startsWith('field-')) return 'full'
+  if (state.screen === 'detail' && state.mode === 'demo' && !state.placeId && !state.category) return 'full'
+  return state.screen === 'compare' && state.mode === 'demo' && !state.placeId && !state.category ? 'map' : 'half'
+}
+
+function WalkedRoutePicker({ routes, onOpen }: { routes: Route[]; onOpen: (route: Route) => void }) {
+  return <div className="walked-route-picker" id="walked-route-picker" role="group" aria-label="選擇試走方向" tabIndex={-1}>
+    {routes.map(route => {
+      const returning = route.id === 'walk-back'
+      return <button key={route.id} onClick={() => onOpen(route)} aria-label={`查看${route.name}`}>
+        <span className="walked-picker-line" style={{ backgroundColor: returning ? colors['walk-back'] : colors['walk-out'] }} aria-hidden="true" />
+        <span><strong>{returning ? '回程' : '去程'}<small>約 {formatDistance(metrics(route).distanceM)}</small></strong>
+          <span>{returning ? '博雅西側 → 總圖' : '總圖 → 博雅西側'}</span>
+        </span>
+      </button>
+    })}
+  </div>
+}
 
 function RouteStats({ route, compact = false }: { route: Route; compact?: boolean }) {
   const m = metrics(route)
@@ -75,15 +96,31 @@ function EntranceCard({ entrance, letter }: { entrance: Entrance; letter: string
   return <details className="entrance-card"><summary><span className="entry-letter">{letter}</span><div><span>{letter === 'A' ? '起點入口' : '終點入口'}</span><strong>{entrance.name}</strong></div><ChevronDown size={17} /></summary><div className="entry-body"><p>{entrance.source}</p><p>查核日期：{formatDate(entrance.verifiedAt)}</p><PhotoGallery key={entrance.id} photos={entrance.photos} /></div></details>
 }
 
-function SegmentInfo({ segment, onOpenPhoto }: { segment: Segment; onOpenPhoto: () => void }) {
+function SegmentInfo({ segment, onOpenPhoto, onSelectField }: { segment: Segment; onOpenPhoto: () => void; onSelectField: (id: string) => void }) {
   const facts = [
     ['最大坡度', metricValue(segment.maxSlopePercent, '%')], ['有效路寬', metricValue(segment.minWidthM, ' m')],
     ['最大階差', metricValue(segment.stepHeightCm, ' cm')], ['坡道長度', metricValue(segment.rampLengthM, ' m')],
     ['路面條件', segment.surface ?? '尚無資料'], ['階梯', segment.hasStairs === null ? '尚未確認' : segment.hasStairs ? '有階梯' : '無階梯'],
   ]
-  return <article className="segment-info"><div className="section-heading"><h3>{segment.name}</h3><span className={`tiny-badge ${segment.status === 'demo' ? 'amber' : ''}`}>{segmentLabel(segment)}</span></div><dl className="fact-grid">{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    <PhotoGallery key={segment.id} photos={segment.photos} onOpen={onOpenPhoto} />
-    <div className={`obstacle-note ${segment.obstacles.length ? 'has-obstacle' : ''}`}><Info size={17} /><p>{segment.obstacles.length ? segment.obstacles.join('、') : segment.status === 'demo' ? '此段未設定額外障礙，實際情況待查核。' : '這段的固定障礙待確認。'}</p></div>
+  const measurements = <dl className="fact-grid">{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+  return <article className={`segment-info ${segment.fieldPointIds ? 'walked-segment-info' : ''}`}><div className="section-heading"><h3>{segment.name}</h3><span className={`tiny-badge ${segment.status === 'demo' ? 'amber' : ''}`}>{segmentLabel(segment)}</span></div>
+    {segment.fieldPointIds ? <>
+      {segment.fieldPointIds.length ? <div className="segment-field-links" role="group" aria-label="這段附近的實勘點">
+        <p>這段附近的實勘點</p>
+        {segment.fieldPointIds.map(id => {
+          const point = fieldObservation(id)
+          if (!point) return null
+          return <button key={id} onClick={() => onSelectField(id)}>
+            <span><strong>{point.name}</strong><small>{point.readings?.map(reading => reading.value).join(' · ') ?? '現場照片'}</small></span>
+            <ChevronRight size={17} aria-hidden="true" />
+          </button>
+        })}
+      </div> : <p className="segment-no-points">這段暫無獨立實勘點。</p>}
+      <details className="evidence-details segment-measurements"><summary>全段通行條件待查核<ChevronDown size={15} /></summary>{measurements}</details>
+    </> : <>{measurements}
+      <PhotoGallery key={segment.id} photos={segment.photos} onOpen={onOpenPhoto} />
+      <div className={`obstacle-note ${segment.obstacles.length ? 'has-obstacle' : ''}`}><Info size={17} /><p>{segment.obstacles.length ? segment.obstacles.join('、') : segment.status === 'demo' ? '此段未設定額外障礙，實際情況待查核。' : '這段的固定障礙待確認。'}</p></div>
+    </>}
     <details className="evidence-details"><summary>資料依據與查核資訊<ChevronDown size={15} /></summary><div><p><span>查核狀態</span>{segmentLabel(segment)}</p><p><span>查核日期</span>{formatDate(segment.verifiedAt)}</p><p><span>圖資取得</span>{formatDate(segment.retrievedAt)}</p><p className="source-text">{segment.source}</p>{segment.sourceUrl && <a href={segment.sourceUrl} target="_blank" rel="noreferrer">查看來源 <ArrowRight size={13} /></a>}</div></details>
   </article>
 }
@@ -96,9 +133,13 @@ export default function App() {
   const [placeQuery,setPlaceQuery]=useState('')
   const [recentPlaces,setRecentPlaces]=useState<string[]>([])
   const [placeFeedback,setPlaceFeedback]=useState('')
+  const [fieldGroup,setFieldGroup]=useState<string[]>()
   const discovering=!!state.placeId||!!state.category||!!placeQuery.trim()
   const selectedPlace=catalog?.places.find(p=>p.id===state.placeId)
-  const foundPlaces=useMemo(()=>catalog?findPlaces(catalog.places,placeQuery,state.category):[],[catalog,placeQuery,state.category])
+  const foundPlaces=useMemo(() => {
+    const matches = catalog ? findPlaces(catalog.places,placeQuery,state.category) : []
+    return fieldGroup ? matches.filter(place => fieldGroup.includes(place.id)) : matches
+  },[catalog,placeQuery,state.category,fieldGroup])
   useEffect(()=>{if(catalog)setRecentPlaces(readRecentPlaces(catalog.places))},[catalog])
   const [showSources, setShowSources] = useState(false)
   const [copyMessage, setCopyMessage] = useState('')
@@ -107,7 +148,7 @@ export default function App() {
   const [favoriteMessage, setFavoriteMessage] = useState('')
   const [undoFavorites, setUndoFavorites] = useState<Favorite[] | null>(null)
   const [profileFeedback, setProfileFeedback] = useState('')
-  const [sheetSize, setSheetSize] = useState<SheetSize>('half')
+  const [sheetSize, setSheetSize] = useState<SheetSize>(() => defaultSheetSize(state))
   const [communityOpen, setCommunityOpen] = useState(false)
   const [communitySegment, setCommunitySegment] = useState('')
   const [communityFocus, setCommunityFocus] = useState<{ coordinate: Coordinate; request: number }>()
@@ -116,7 +157,7 @@ export default function App() {
   const panelRef = useRef<HTMLElement>(null)
   useEffect(()=>{
     panelRef.current?.querySelector('.panel-main')?.scrollTo({top:0})
-  },[state.placeId,state.category,placeQuery])
+  },[state.placeId,state.category,placeQuery,fieldGroup])
 
   useEffect(() => {
     const handler = async () => {
@@ -125,7 +166,10 @@ export default function App() {
         try { await flushSurveyDraft() }
         catch { window.history.replaceState(null, '', toHash(state)); return }
       }
-      if (next.screen !== state.screen) setSheetSize('half')
+      if (next.screen !== state.screen || next.placeId !== state.placeId || next.category !== state.category) {
+        setSheetSize(defaultSheetSize(next))
+        if (next.category !== 'field' || next.screen !== state.screen) setFieldGroup(undefined)
+      }
       setState(next)
     }
     window.addEventListener('hashchange', handler)
@@ -135,7 +179,8 @@ export default function App() {
     if (state.screen === 'editor') { try { await flushSurveyDraft() } catch { return } }
     const next = { ...state, ...(patch.origin && patch.origin !== state.origin ? { routeId: '', segmentId: '' } : {}), ...(patch.screen?{placeId:undefined,category:undefined}:{}), ...patch }
     if(patch.screen){setPlaceQuery('');setPlaceFeedback('')}
-    if (patch.screen) setSheetSize('half')
+    if (patch.screen || 'category' in patch && next.category !== 'field') setFieldGroup(undefined)
+    if (patch.screen) setSheetSize(defaultSheetSize(next))
     setState(next)
     const hash = toHash(next)
     if (window.location.hash !== hash) window.location.hash = hash
@@ -211,8 +256,13 @@ export default function App() {
   }
 
   const clearDiscovery=()=>{
-    setPlaceQuery('');setPlaceFeedback('');void navigate({placeId:undefined,category:undefined});setSheetSize('half')
-    requestAnimationFrame(()=>document.getElementById('panel-heading')?.focus({preventScroll:true}))
+    setPlaceQuery('');setPlaceFeedback('');void navigate({placeId:undefined,category:undefined})
+    const nextSize = defaultSheetSize({ ...state, placeId: undefined, category: undefined })
+    setSheetSize(nextSize)
+    requestAnimationFrame(() => {
+      const heading = mobile && nextSize === 'map' ? 'walked-route-picker' : 'panel-heading'
+      document.getElementById(heading)?.focus({ preventScroll: true })
+    })
   }
   const choosePlace=(place:CatalogPlace)=>{
     tour.pause();setPlaceQuery('');setPlaceFeedback('')
@@ -221,10 +271,47 @@ export default function App() {
     void navigate({placeId:place.id});setSheetSize(place.category==='field'?'full':'half')
   }
   const chooseCategory=(category:CatalogCategory)=>{
-    const next = state.category===category ? undefined : category
-    tour.pause();setPlaceQuery('');setPlaceFeedback('');void navigate({category:next,placeId:undefined});setSheetSize(next==='field'?'full':'half')
+    if (state.category === category && !fieldGroup) { clearDiscovery(); return }
+    tour.pause();setFieldGroup(undefined);setPlaceQuery('');setPlaceFeedback('')
+    void navigate({category,placeId:undefined});setSheetSize(category==='field'?'full':'half')
     requestAnimationFrame(()=>document.getElementById('place-heading')?.focus({preventScroll:true}))
   }
+  const chooseFieldGroup = (ids: string[]) => {
+    tour.pause()
+    setPlaceQuery('')
+    setPlaceFeedback('')
+    setFieldGroup(ids)
+    void navigate({ category: 'field', placeId: undefined })
+    setSheetSize('full')
+    requestAnimationFrame(() => document.getElementById('place-heading')?.focus({ preventScroll: true }))
+  }
+  const choosePlaceById = (id: string) => {
+    const place = catalog?.places.find(place => place.id === id)
+    if (place) choosePlace(place)
+  }
+  const closePlace = () => {
+    if (!state.category) { clearDiscovery(); return }
+    void navigate({ placeId: undefined })
+    requestAnimationFrame(() => document.getElementById('place-heading')?.focus({ preventScroll: true }))
+  }
+  const showAllFieldPoints = fieldGroup ? () => {
+    setFieldGroup(undefined)
+    requestAnimationFrame(() => document.getElementById('place-heading')?.focus({ preventScroll: true }))
+  } : undefined
+  const segmentTabs = selected && activeSegment ? <div className="segment-tabs" role="group" aria-label="選擇路段">
+    {selected.segments.map((segment, index) => <button key={segment.id} aria-label={`路段 ${index + 1}：${segment.name}`} aria-pressed={activeSegment.id === segment.id} className={activeSegment.id === segment.id ? 'active' : ''} onClick={event => {
+      void navigate({ segmentId: segment.id })
+      const picker = event.currentTarget.closest<HTMLDetailsElement>('.walked-segment-picker')
+      if (picker) {
+        picker.open = false
+        picker.querySelector('summary')?.focus({ preventScroll: true })
+      }
+    }}><span>{index + 1}</span><div><strong>{segment.name}</strong><small>{formatDistance(lineDistance(segment.coordinates))}</small></div><ChevronRight size={15} /></button>)}
+  </div> : null
+  const mobilePreview = mobile && explorer && <details className="mobile-route-preview">
+    <summary>路線預演<ChevronDown size={16} aria-hidden="true" /></summary>
+    {explorer}
+  </details>
   const setPlaceEndpoint=(action:'from'|'to')=>{
     if(!selectedPlace)return
     const patch=placeEndpointPatch(selectedPlace,action)
@@ -248,13 +335,12 @@ export default function App() {
     <div className={`mode-strip ${isDemo && step >= 0 ? 'demo' : 'survey'}`} role="status">{state.screen === 'editor' ? <><ClipboardCheck size={16} aria-hidden="true" /><strong>本機實勘草稿</strong><span>填寫後匯出，交由團隊審核</span></> : step < 0 ? <><Info size={16} aria-hidden="true" /><strong>校園試用版</strong><span>總圖書館與博雅教學館周邊</span></> : isDemo ? <><TriangleAlert size={16} aria-hidden="true" /><strong>試走紀錄</strong><span>依實際走法重繪，通行條件待查核</span></> : <><ShieldCheck size={16} aria-hidden="true" /><strong>查核模式</strong><span>全程及兩端入口均需有實勘證據</span></>}</div>
 
     {state.screen === 'help' ? <HelpPage onDemo={() => navigate({ screen: 'setup', mode: 'demo', routeId: '', segmentId: '' })} onEditor={() => navigate({ screen: 'editor' })} onSources={() => setShowSources(true)} /> : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={allRoutes} onOpen={favorite => navigate(fromHash(favorite.hash))} onRemove={key => { const previous = favorites; if (persistFavorites(favorites.filter(f => f.key !== key))) { setUndoFavorites(previous); setFavoriteMessage('已移除收藏，可立即復原。') } }} onUndo={() => { if (undoFavorites && persistFavorites(undoFavorites)) { setUndoFavorites(null); setFavoriteMessage('已復原收藏。') } }} canUndo={!!undoFavorites} onPlan={() => navigate({ screen: 'setup' })} feedback={favoriteMessage} /> : loading && !campus ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError && !campus || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。你也可以先閱讀使用說明。</p><button className="button primary" onClick={retryCampus}>重新載入圖資</button><button className="button secondary" onClick={() => navigate({ screen: 'help' })}>使用說明</button></main> : state.screen === 'editor' ? <Suspense fallback={<main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>載入實勘編輯器</h1></main>}><SurveyEditor campus={campus} onClose={() => navigate({ screen: 'setup' })} /></Suspense> : <main className={`workspace route-workspace ${catalog?'has-discovery':''}`} data-discovering={discovering} data-sheet={sheetSize} data-screen={state.screen}>
-      <MapSheet label={discovering?'地點資訊':state.screen==='setup'?'路線設定':undefined} size={sheetSize} onSize={setSheetSize} mobile={mobile} panelRef={panelRef} collapsed={discovering?collapsedPlace:tourRoute ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} /> : <div className="sheet-route-summary"><div><strong>{state.screen === 'setup' ? '規劃校園路線' : routes.length ? `${routes.length} 條${isDemo ? '試走' : '查核'}路線` : '目前無可用路線'}</strong><span>{placeNames[state.origin]} → {placeNames[destination]}</span></div><button onClick={() => setSheetSize('half')}>{state.screen === 'setup' ? '設定條件' : '查看資訊'}</button></div>}>
+      <MapSheet label={discovering?'地點資訊':state.screen==='setup'?'路線設定':undefined} size={sheetSize} onSize={setSheetSize} mobile={mobile} panelRef={panelRef} collapsed={discovering?collapsedPlace: state.screen === 'compare' && isDemo && routes.length > 0 ? <WalkedRoutePicker routes={routes} onOpen={openRoute} /> : tourRoute ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} /> : <div className="sheet-route-summary"><div><strong>{state.screen === 'setup' ? '規劃校園路線' : routes.length ? `${routes.length} 條${isDemo ? '試走' : '查核'}路線` : '目前無可用路線'}</strong><span>{placeNames[state.origin]} → {placeNames[destination]}</span></div><button onClick={() => setSheetSize('half')}>{state.screen === 'setup' ? '設定條件' : '查看資訊'}</button></div>}>
         <div className="panel-main" key={state.screen}>
           {placeFeedback&&<p className="place-endpoint-feedback" role="status">{placeFeedback}</p>}
           {discovering&&selectedPlace&&<CatalogStatus loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/>}
-          {discovering&&catalog&&(selectedPlace?<PlaceCard key={selectedPlace.id} place={selectedPlace} catalog={catalog} entrances={placeEntrances} mode={state.mode} onClose={()=>{void navigate({placeId:undefined});requestAnimationFrame(()=>document.getElementById(state.category?'place-heading':'panel-heading')?.focus({preventScroll:true}))}} onEndpoint={setPlaceEndpoint} onChoose={choosePlace} shareUrl={window.location.origin+window.location.pathname+toHash({...state,screen:'setup',placeId:selectedPlace.id,category:undefined})}/>:state.placeId?<section className="place-empty"><h1 id="place-heading" tabIndex={-1}>{placeData.loading?'正在載入地點':'這個地點目前無法開啟'}</h1><p>地點連結可能已變更，或資料快照尚未載入。可重新搜尋或返回路線。</p><CatalogStatus loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/><button className="button secondary wide" onClick={clearDiscovery}>返回路線規劃</button></section>:<PlaceList key={state.category??placeQuery} catalog={catalog} results={foundPlaces} title={placeQuery.trim()?'搜尋結果':state.category?`附近${categoryLabels[state.category]}`:'校園地點'} onChoose={choosePlace} onBack={clearDiscovery} loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/>)}
+          {discovering&&catalog&&(selectedPlace?<PlaceCard key={selectedPlace.id} place={selectedPlace} catalog={catalog} entrances={placeEntrances} mode={state.mode} onClose={closePlace} backLabel={state.category ? '返回點位清單' : state.screen === 'detail' ? '返回路段' : '返回路線地圖'} onEndpoint={setPlaceEndpoint} onChoose={choosePlace} shareUrl={window.location.origin+window.location.pathname+toHash({...state,placeId:selectedPlace.id,category:undefined})}/>:state.placeId?<section className="place-empty"><h1 id="place-heading" tabIndex={-1}>{placeData.loading?'正在載入地點':'這個地點目前無法開啟'}</h1><p>地點連結可能已變更，或資料快照尚未載入。可重新搜尋或返回路線。</p><CatalogStatus loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/><button className="button secondary wide" onClick={clearDiscovery}>返回路線規劃</button></section>:<PlaceList key={state.category??placeQuery} catalog={catalog} results={foundPlaces} title={placeQuery.trim()?'搜尋結果':state.category==='field'?(fieldGroup?'附近實勘點':'實勘點') :state.category?`附近${categoryLabels[state.category]}`:'校園地點'} onChoose={choosePlace} onBack={clearDiscovery} fieldList={state.category==='field'} showAllFieldPoints={showAllFieldPoints} backLabel={state.screen==='setup'?'返回路線規劃':'返回路線地圖'} loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/>)}
           <div className="route-panel-content" hidden={discovering}>
-          {mobile && explorer}
           {state.screen === 'setup' && <>
             <h1 id="panel-heading" tabIndex={-1}>規劃校園路線</h1><p className="panel-intro">選擇起終點，再比較沿途的通行條件。</p>
             <form id="route-planner" onSubmit={e => { e.preventDefault(); query() }} className="route-form">
@@ -271,7 +357,7 @@ export default function App() {
           {state.screen === 'compare' && routes.length > 0 && (isDemo || !surveyLoading) && <>
             <div className="panel-title-row"><h1 id="panel-heading" tabIndex={-1}>比較路線</h1><button className="back-link" onClick={() => navigate({ screen: 'setup' })}><SlidersHorizontal size={16} aria-hidden="true" />修改條件</button></div>{isDemo ? <p className="route-pair">總圖前廣場 ⇄ 博雅教學館西側</p> : <p className="route-pair"><span>{placeNames[state.origin]}</span><ArrowRight size={16} aria-hidden="true" /><span>{placeNames[destination]}</span></p>}
             <div className="compare-preference"><span>{routes.length} 條{isDemo ? '試走' : ''}路線</span><span>{state.wheelchair === 'manual' ? '手動輪椅' : '電動輪椅'}</span>{!isDemo && <span>{state.preference === 'gentle' ? '依坡度排序' : '依距離排序'}</span>}</div>
-            <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'walk-back' ? 'direct' : 'gentle'} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Mountain size={20} aria-hidden="true" /> : <RouteIcon size={20} aria-hidden="true" />}</span><div><strong>{route.name}</strong><span>{route.description}</span></div>{i === 0 && !isDemo && <span className="preference-tag">符合偏好</span>}</div><RouteStats route={route} />{(()=>{const relevant=routeReports(route,community.reports,communitySegments);const summary=communitySummary(relevant,new Set(relevant.map(r=>r.segmentId)),community.now);return summary.total>0?<p className="community-route-note"><MessageSquare size={14}/><span>社群路況 {summary.total} 則，其中 {summary.recent} 則近期回報{summary.blocked>0?'，含通行受阻回報':''}。查看路段了解現場資訊。</span></p>:null})()}<div className="route-card-surface"><span>{isDemo ? '通行條件待查核' : '無階梯'}</span><span>{metrics(route).surfaces.join('、')}</span></div>{route.kind === 'survey' && <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>}<div className="route-card-footer"><span>{isDemo ? '試走紀錄，部分資料待查核' : '全程及入口已查核'}</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div></button>)}</div>
+            <div className="route-cards">{routes.map((route, i) => <button key={route.id} className={`route-card ${route.id === 'walk-back' ? 'direct' : 'gentle'} ${route.walked ? 'walked-route-card' : ''} ${selected?.id === route.id ? 'selected' : ''}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}><div className="route-card-top"><span className="route-card-icon">{route.id === 'gentle' ? <Mountain size={20} aria-hidden="true" /> : <RouteIcon size={20} aria-hidden="true" />}</span><div><strong>{route.name}</strong><span>{route.description}</span>{route.walked && <small className="walked-route-distance">圖上約 {formatDistance(metrics(route).distanceM)} · {route.segments.length} 段</small>}</div>{i === 0 && !isDemo && <span className="preference-tag">符合偏好</span>}</div>{!route.walked && <RouteStats route={route} />}{(()=>{const relevant=routeReports(route,community.reports,communitySegments);const summary=communitySummary(relevant,new Set(relevant.map(r=>r.segmentId)),community.now);return summary.total>0?<p className="community-route-note"><MessageSquare size={14}/><span>社群路況 {summary.total} 則，其中 {summary.recent} 則近期回報{summary.blocked>0?'，含通行受阻回報':''}。查看路段了解現場資訊。</span></p>:null})()}{!route.walked && <div className="route-card-surface"><span>{isDemo ? '通行條件待查核' : '無階梯'}</span><span>{metrics(route).surfaces.join('、')}</span></div>}{route.kind === 'survey' && <p className="verification-age">最舊查核 {formatDate(oldestVerification(route))}，{daysSince(oldestVerification(route)!)} 天前</p>}<div className="route-card-footer"><span>{isDemo ? '通行條件待查核' : '全程及入口已查核'}</span><strong>檢視路段<ChevronRight size={18} aria-hidden="true" /></strong></div></button>)}</div>
             <ConditionControls enabled={!!state.avoidReports} onChange={avoidReports => navigate({ avoidReports, routeId: '', segmentId: '' })} community={community} />
             {!isDemo && <ComparisonSummary routes={routes} />}
           </>}
@@ -279,10 +365,16 @@ export default function App() {
           {state.screen === 'compare' && candidates.excluded.length > 0 && <section className="excluded-routes"><h2>未符合目前條件的動線</h2><p>以下動線已依你設定的條件排除。</p>{candidates.excluded.map(({ route, reasons }) => <article key={route.id}><h3>{route.name}</h3><ul>{reasons.map(reason => <li key={reason}>{reason}</li>)}</ul></article>)}<button className="button secondary wide" onClick={() => navigate({ screen: 'setup' })}>調整通行條件</button></section>}
 
           {state.screen === 'detail' && !resolved.problem && selected && activeSegment && (isDemo || !surveyLoading) && <>
-            <button className="back-link" onClick={() => navigate({ screen: 'compare' })}><ArrowLeft size={17} aria-hidden="true" />返回比較</button><h1 id="panel-heading" tabIndex={-1}>路段資訊</h1><div className="detail-route-title"><span className={`route-color-dot ${selected.id}`} />{selected.name}<span>{formatDistance(metrics(selected).distanceM)}</span></div><p className="detail-route-description">{selected.description}</p>
-            <BottleneckList route={selected} onSelect={id => navigate({ segmentId: id })} />
-            <div className="segment-tabs" role="group" aria-label="選擇路段">{selected.segments.map((segment, i) => <button key={segment.id} aria-label={`路段 ${i + 1}：${segment.name}`} aria-pressed={activeSegment.id === segment.id} className={activeSegment.id === segment.id ? 'active' : ''} onClick={() => navigate({ segmentId: segment.id })}><span>{i + 1}</span><div><strong>{segment.name}</strong><small>{formatDistance(lineDistance(segment.coordinates))}</small></div><ChevronRight size={15} /></button>)}</div>
-            <SegmentInfo segment={activeSegment} onOpenPhoto={tour.pause} />
+            <div className="panel-title-row"><h1 id="panel-heading" tabIndex={-1}>路段資訊</h1><button className="back-link" onClick={() => navigate({ screen: 'compare' })}><ArrowLeft size={17} aria-hidden="true" />返回比較</button></div>
+            <div className="detail-route-title"><span className={`route-color-dot ${selected.id}`} />{selected.name}<span>{formatDistance(metrics(selected).distanceM)}</span></div>
+            {(!mobile || !selected.walked) && <p className="detail-route-description">{selected.description}</p>}
+            {!selected.walked && <><BottleneckList route={selected} onSelect={id => navigate({ segmentId: id })} />{segmentTabs}</>}
+            <SegmentInfo segment={activeSegment} onOpenPhoto={tour.pause} onSelectField={choosePlaceById} />
+            {selected.walked && <details className="walked-segment-picker">
+              <summary>切換路段<small>第 {selected.segments.findIndex(segment => segment.id === activeSegment.id) + 1} / {selected.segments.length} 段</small><ChevronDown size={16} aria-hidden="true" /></summary>
+              {segmentTabs}
+            </details>}
+            {mobilePreview}
             <CommunitySection data={community} segmentId={activeSegment.id} onOpen={() => openCommunity(activeSegment.id)} onOpenPhoto={tour.pause} />
             <div className="sticky-panel-actions"><button className="button primary wide" onClick={() => navigate({ screen: 'confirm', routeId: selected.id })}>選擇這條路線<Check size={18} /></button></div>
           </>}
@@ -292,14 +384,15 @@ export default function App() {
             <div className="confirmed-route"><div className="section-heading"><strong>{selected.name}</strong><span className={`tiny-badge ${isDemo ? 'amber' : ''}`}>{isDemo ? '試走紀錄' : '已查核'}</span></div><RouteStats route={selected} compact /></div>
             <div className="entry-cards"><EntranceCard entrance={selected.originEntrance} letter="A" /><div className="entry-connector" /><EntranceCard entrance={selected.destinationEntrance} letter="B" /></div>
             <div className="section-heading confirm-segments-title"><h3>沿途路段</h3><span>{selected.segments.length} 段</span></div><div className="confirm-segments">{selected.segments.map((segment, i) => <button key={segment.id} onClick={() => navigate({ screen: 'detail', segmentId: segment.id })}><span>{i + 1}</span><strong>{segment.name}</strong><span>{formatDistance(lineDistance(segment.coordinates))}</span><ChevronRight size={16} /></button>)}</div>
+            {mobilePreview}
             {selected.kind === 'survey' && <p className="verification-age">全程最舊查核日期 {formatDate(oldestVerification(selected))}，距今 {daysSince(oldestVerification(selected)!)} 天。</p>}
             <div className="sticky-panel-actions"><button className="button primary wide" onClick={copyLink}><Copy size={18} />複製路線連結</button><div className="confirm-extra-actions"><button className="button secondary" onClick={saveFavorite}><Bookmark size={17} />收藏這條路線</button><button className="button secondary" onClick={() => window.print()}><Printer size={17} />列印路線</button></div>{favoriteMessage && <p className="copy-feedback" role="status">{favoriteMessage}</p>}{copyMessage && <p className="copy-feedback" role="status"><CheckCircle2 size={15} />{copyMessage}</p>}{copyFallback && <input className="copy-fallback" aria-label="路線連結" readOnly value={`${window.location.origin}${window.location.pathname}${toHash({ ...state, routeId: selected.id })}`} onFocus={e => e.target.select()} />}<p className="form-footnote">出發前請確認入口與現場路況。</p></div>
           </>}
         </div></div>
         {!discovering && state.screen === 'setup' && <div className="setup-actions"><button type="submit" form="route-planner" className="button primary wide search-button">{isDemo ? '查看試走路線' : '比較路線'}<ArrowRight size={19} aria-hidden="true" /></button><p className="form-footnote">{isDemo ? '博雅館內虛線為約略走向。' : '未查核路段不列入候選路線。'}</p></div>}
       </MapSheet>
-      {catalog&&<PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces} onQuery={value=>{tour.pause();setPlaceQuery(value);if(state.placeId||state.category)void navigate({placeId:undefined,category:undefined});setSheetSize('half')}} onChoose={choosePlace} onCategory={chooseCategory} onClear={clearDiscovery} onBrowse={()=>{if(!placeQuery.trim()&&!state.category)void navigate({category:'building',placeId:undefined});setSheetSize('full');requestAnimationFrame(()=>document.getElementById('place-heading')?.focus({preventScroll:true}))}} onClearRecent={()=>{if(clearRecentPlaces()){setRecentPlaces([]);setPlaceFeedback('已清除最近查看。')}else setPlaceFeedback('此瀏覽器無法清除儲存紀錄，可從網站設定管理。')}}/>}
-      <CampusMap mapTheme={state.mapTheme} onThemeChange={mapTheme=>{tour.pause();setPlaceQuery('');setPlaceFeedback('');void navigate({mapTheme,placeId:undefined,category:undefined});if(mobile)setSheetSize('map')}} communityFocus={communityFocus} catalogPlaces={catalog?.places} catalogCategory={state.category} catalogQuery={placeQuery} selectedPlaceId={state.placeId} discoveryActive={discovering} onSelectPlace={id=>{const place=catalog?.places.find(p=>p.id===id);if(place)choosePlace(place)}} onReturnRoutes={clearDiscovery} campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} communityReports={community.reports} communitySegments={communitySegments} onSelectCommunity={openCommunity} onLocationActivity={() => { tour.pause(); tour.setFollowing(false);if(discovering){setPlaceQuery('');void navigate({placeId:undefined,category:undefined})} }} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => {setPlaceQuery('');void navigate({ origin: routes.find(route => route.id === id)?.originEntrance.placeId, routeId: id, segmentId: '',placeId:undefined,category:undefined });setSheetSize('half')}} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', origin: routes.find(route=>route.segments.some(segment=>segment.id===id))?.originEntrance.placeId, routeId: routes.find(route=>route.segments.some(segment=>segment.id===id))?.id ?? selected?.id ?? '', segmentId: id }); setSheetSize('half') }} />
+      {catalog&&<PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces} onQuery={value=>{tour.pause();setFieldGroup(undefined);setPlaceQuery(value);if(state.placeId||state.category)void navigate({placeId:undefined,category:undefined});setSheetSize('half')}} onChoose={choosePlace} onCategory={chooseCategory} onClear={clearDiscovery} onBrowse={()=>{if(!placeQuery.trim()&&!state.category)void navigate({category:'building',placeId:undefined});setSheetSize('full');requestAnimationFrame(()=>document.getElementById('place-heading')?.focus({preventScroll:true}))}} onClearRecent={()=>{if(clearRecentPlaces()){setRecentPlaces([]);setPlaceFeedback('已清除最近查看。')}else setPlaceFeedback('此瀏覽器無法清除儲存紀錄，可從網站設定管理。')}}/>}
+      <CampusMap mapTheme={state.mapTheme} onThemeChange={mapTheme=>{tour.pause();setPlaceQuery('');setPlaceFeedback('');void navigate({mapTheme,placeId:undefined,category:undefined});if(mobile)setSheetSize('map')}} communityFocus={communityFocus} catalogPlaces={catalog?.places} catalogCategory={state.category} catalogQuery={placeQuery} selectedPlaceId={state.placeId} discoveryActive={discovering} onSelectPlace={choosePlaceById} fieldGroupIds={fieldGroup} onSelectFieldGroup={chooseFieldGroup} onReturnRoutes={clearDiscovery} campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode={state.mode} screen={state.screen} layoutKey={mobile ? sheetSize : 'desktop'} communityReports={community.reports} communitySegments={communitySegments} onSelectCommunity={openCommunity} onLocationActivity={() => { tour.pause(); tour.setFollowing(false);if(discovering){setPlaceQuery('');void navigate({placeId:undefined,category:undefined})} }} preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined} onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }} onSelectRoute={id => {setPlaceQuery('');void navigate({ origin: routes.find(route => route.id === id)?.originEntrance.placeId, routeId: id, segmentId: '',placeId:undefined,category:undefined });setSheetSize('half')}} onSelectSegment={id => { void navigate({ screen: state.screen === 'setup' ? 'setup' : 'detail', origin: routes.find(route=>route.segments.some(segment=>segment.id===id))?.originEntrance.placeId, routeId: routes.find(route=>route.segments.some(segment=>segment.id===id))?.id ?? selected?.id ?? '', segmentId: id }) }} />
       {!mobile && explorer && <div className="experience-dock">{explorer}</div>}
     </main>}
     <OfflineStatus snapshotDate={campus?.retrievedAt} beforeUpdate={async () => { try { await flushSurveyDraft(); return document.documentElement.dataset.surveyUnsaved !== 'true' } catch { return false } }} />

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildWalkedRoutes } from '../src/walked-routes'
+import { fieldObservation } from '../src/field-observations'
+import { groupFieldMarkers } from '../src/field-marker-groups'
 import { isEligible, metrics } from '../src/routes'
+import type { Coordinate } from '../src/types'
 
 describe('field walk records', () => {
   it('joins the outbound and return at Boya west and at the library plaza', () => {
@@ -26,5 +29,24 @@ describe('field walk records', () => {
     expect(buildWalkedRoutes()[0].segments.at(-1)).toMatchObject({
       name: '博雅館內至西側出口', approximate: true,
     })
+  })
+
+  it('links all field records to nearby segments while keeping spot values out of route metrics', () => {
+    const ids = buildWalkedRoutes().flatMap(route => route.segments.flatMap(segment => segment.fieldPointIds ?? []))
+    expect(new Set(ids).size).toBe(12)
+    expect(ids.every(id => !!fieldObservation(id))).toBe(true)
+    expect(fieldObservation('field-boya-indoor-ramp')?.readings?.map(reading => reading.value)).toEqual(['89 公分', '1W'])
+  })
+
+  it('clusters overlapping targets and separates them when zoomed in', () => {
+    const places = [
+      { id: 'east', coordinate: [0, 0] as Coordinate },
+      { id: 'indoor', coordinate: [30, 36] as Coordinate },
+      { id: 'west', coordinate: [60, 70] as Coordinate },
+      { id: 'library', coordinate: [150, 0] as Coordinate },
+    ]
+    expect(groupFieldMarkers(places, ([x, y]) => ({ x, y })).map(group => group.map(place => place.id)))
+      .toEqual([['east'], ['indoor', 'west'], ['library']])
+    expect(groupFieldMarkers(places, ([x, y]) => ({ x: x * 2, y: y * 2 }))).toHaveLength(4)
   })
 })

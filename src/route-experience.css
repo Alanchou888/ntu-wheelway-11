@@ -12,6 +12,31 @@
 .map-experience .map-sheet .setup-actions { padding: 15px 24px; border-top: 1px solid var(--border); }
 .map-experience .map-sheet .sticky-panel-actions { position: sticky; bottom: 0; padding: 16px 0; background: #fff; margin-top: 12px; z-index: 2; }
 .map-experience .map-sheet h1 { font-size: 25px; }
+.walked-route-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.walked-route-picker button:only-child { grid-column: 1 / -1; }
+.walked-route-picker button { display: flex; align-items: center; gap: 8px; min-height: 53px; padding: 7px 9px; border: 1px solid #c5d2dd; border-radius: 8px; background: #fff; text-align: left; color: var(--ink); }
+.walked-route-picker button:hover { background: #f3f7fb; border-color: #7290ab; }
+.walked-picker-line { flex: 0 0 4px; align-self: stretch; border-radius: 4px; }
+.walked-route-picker button strong { display: flex; align-items: baseline; gap: 6px; font-size: 15px; }
+.walked-route-picker button small, .walked-route-picker button > span > span { font-size: 11px; color: var(--muted); font-weight: 500; }
+.walked-route-picker button > span > span { display: block; margin-top: 2px; line-height: 1.4; }
+.walked-route-card .walked-route-distance { font-size: 12px; color: var(--ink); font-weight: 600; }
+.map-sheet .walked-segment-info { padding-top: 10px; }
+.segment-field-links { margin: 12px 0 16px; }
+.segment-field-links p, .segment-no-points { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 10px 0 6px; }
+.segment-field-links button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 54px; margin-top: 6px; padding: 8px 10px; border: 1px solid #c2d8d3; border-radius: 7px; background: #f3faf7; color: #204d44; text-align: left; }
+.segment-field-links button:hover { background: #e3f3ed; border-color: #69998b; }
+.segment-field-links button svg { flex-shrink: 0; }
+.segment-field-links button strong, .segment-field-links button small { display: block; font-size: 13px; line-height: 1.6; }
+.segment-field-links button small { color: #46665f; font-size: 12px; }
+.segment-measurements .fact-grid { padding: 0; margin: 8px 0 0; }
+.walked-segment-picker, .mobile-route-preview { margin: 12px 0; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; }
+.walked-segment-picker > summary, .mobile-route-preview > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--green); font-size: 13px; font-weight: 600; cursor: pointer; }
+.walked-segment-picker > summary::-webkit-details-marker, .mobile-route-preview > summary::-webkit-details-marker { display: none; }
+.walked-segment-picker > summary > small { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
+.mobile-route-preview > summary > svg { margin-left: auto; }
+.walked-segment-picker[open] > summary > svg, .mobile-route-preview[open] > summary > svg { transform: rotate(180deg); }
+.walked-segment-picker .segment-tabs { margin: 0 0 8px; }
 .map-experience .map-title-pill { left: calc(var(--map-panel-width) + 42px); top: 18px; }
 .map-experience .map-legend { left: calc(var(--map-panel-width) + 42px); bottom: 20px; }
 .map-experience .map-network-note { left: calc(var(--map-panel-width) + 42px); right: 76px; top: 72px; bottom: auto; }

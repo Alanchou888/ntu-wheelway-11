@@ -3,8 +3,18 @@ import { fieldObservation } from './field-observations'
 import { walkedSections } from './walked-geometry'
 
 const fieldIds = {
-  out: ['field-library-ramp', 'field-curb-incline', '', 'field-boya-ramp', 'field-boya-indoor-ramp'],
-  back: ['field-boya-west-ramp', 'field-covered-walkway', ''],
+  out: [
+    ['field-library-ramp'],
+    ['field-curb-incline', 'field-road-incline'],
+    [],
+    ['field-boya-ramp'],
+    ['field-boya-indoor-ramp', 'field-boya-restroom'],
+  ],
+  back: [
+    ['field-boya-west-ramp', 'field-covered-walkway', 'field-tile-incline'],
+    ['field-redline-incline'],
+    ['field-bricks', 'field-bicycles'],
+  ],
 }
 
 export function buildWalkedRoutes(): Route[] {
@@ -12,12 +22,13 @@ export function buildWalkedRoutes(): Route[] {
     const outbound = direction === 'out'
     const id = `walk-${direction}`
     const segments: Segment[] = walkedSections[direction].map((section, index) => {
-      const evidence = fieldObservation(fieldIds[direction][index])
+      const fieldPointIds = fieldIds[direction][index]
       return {
         ...section, id: `${id}-${index + 1}`, status: 'unverified',
         maxSlopePercent: null, minWidthM: null, stepHeightCm: null, rampLengthM: null,
         hasStairs: null, closed: null, surface: null,
-        photos: evidence?.photos ?? [], obstacles: evidence ? [evidence.note] : [],
+        photos: fieldPointIds.length ? fieldObservation(fieldPointIds[0])?.photos ?? [] : [],
+        obstacles: [], fieldPointIds,
         source: section.approximate
           ? '依第 11 組試走紀錄連接博雅東、西側，館內線為約略示意，樓層與轉折待核對。'
           : '第 11 組 2026/11/10 試走，依口述地標與 OpenStreetMap 步道重繪。',
