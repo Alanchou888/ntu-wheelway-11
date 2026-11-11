@@ -14,6 +14,7 @@ interface Observation {
   coordinate: Coordinate
   note: string
   location: string
+  level?: string
   files: string
   photos: Photo[]
   readings?: { label: string; value: string; context: string }[]
@@ -29,12 +30,12 @@ const observations: Observation[] = [
     id: 'field-library-ramp',
     name: '總圖階梯旁無障礙坡道',
     coordinate: [121.540236, 25.017225],
-    location: '由同場照片 GPS 定位。坡道兩端及手機放置的位置待核對。',
+    location: '組員確認量測位置在總圖階梯旁無障礙坡道。地圖依同場照片 GPS 估位。',
     files: 'IMG_0958、IMG_9227（試走影片），IMG_0961、IMG_0963、IMG_0964（手機量測照片）',
     note: '石板坡面兩側有扶手。平常有練習的組員試上坡時仍覺得費力，上肢力量較小的使用者可能需要協助。坡長與最窄淨寬待量。',
-    readings: [{ label: '附近石面讀值', value: '−7°、−6°、0E', context: '−6° 和 0E 來自同一張照片中的兩支手機。放置位置和方向待核對，坡道坡度需重新量測。' }],
+    readings: [{ label: '坡道石面讀值', value: '−7°、−6°、0E', context: 'IMG_0961、IMG_0963 顯示 −7°。IMG_0964 的兩支手機分別顯示 −6° 與 0E。量測方向待確認，需沿坡道行進方向重測。' }],
     photos: [photo('library-ramp', '石板坡面與兩側扶手', '坡道下端，取自 IMG_0958。'),
-      photo('library-level', '兩支手機在石面上分別顯示 0E 與 −6 度', 'IMG_0964。兩支手機在紅色石面上的原始讀值。')],
+      photo('library-level', '兩支手機在無障礙坡道石面上分別顯示 0E 與 −6 度', 'IMG_0964。總圖無障礙坡道石面上的兩支手機讀值。')],
   },
   {
     id: 'field-road-incline',
@@ -74,7 +75,8 @@ const observations: Observation[] = [
     id: 'field-boya-indoor-ramp',
     name: '博雅館內扶手坡道',
     coordinate: [121.537003, 25.018886],
-    location: '以 IMG_9238 中量測手機顯示的座標估位，影片本身的 GPS 有偏移。樓層、轉折與門的位置待核對。',
+    level: '一樓',
+    location: '組員確認位於博雅教學館一樓。地圖以 IMG_9238 中量測手機的座標估位，館內轉折與門的位置待核對。',
     files: 'IMG_5065、IMG_5066（館內影片），IMG_3123（寬度照片），IMG_9238 約 00:00.9（量測畫面）',
     note: '組員試走時，本次使用的手動輪椅勉強能過。較寬的輪椅可能受限，需核對扶手間最窄處。',
     readings: [
@@ -88,7 +90,8 @@ const observations: Observation[] = [
     id: 'field-boya-restroom',
     name: '博雅館內廁所門口',
     coordinate: [121.5366969, 25.01889],
-    location: '組員確認位於博雅館內。地圖標在建物中心，廁所的樓層與門口位置待確認。',
+    level: '一樓',
+    location: '組員確認位於博雅教學館一樓。地圖標在建物中心，廁所門口的確切位置待核對。',
     files: 'IMG_3126（門口寬度照片），IMG_5067 約 00:22 至 00:33（館內試走影片）',
     note: '影片可見本次試用的手動輪椅進入廁所，門邊有組員。能否獨立進出仍待確認。較寬的電動輪椅可能受限，現場尚未試走。',
     readings: [{ label: '門口約寬', value: '78 公分', context: 'iPad 單點估測。開門角度與轉向空間也會影響進出。' }],
@@ -162,7 +165,7 @@ export function withFieldObservations(catalog: PlaceCatalog): PlaceCatalog {
     aliases: ['現場紀錄', '實勘點'], note: point.note, photos: point.photos,
     sourceId: source.id, sourceUrl: point.photos[0].src, retrievedAt: date,
     verifiedAt: null, routePlaceId: null, contextId: null, address: null, openingHours: null,
-    wheelchair: null, level: null, indoor: null, widthM: null, slopePercent: null,
+    wheelchair: null, level: point.level ?? null, indoor: null, widthM: null, slopePercent: null,
   }))
   return { ...catalog, places: [...catalog.places, ...places], sources: [...catalog.sources, source] }
 }

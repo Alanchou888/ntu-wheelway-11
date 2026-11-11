@@ -65,11 +65,11 @@ export function PlaceList({catalog,results,title,onChoose,onBack,loading,error,o
     {results.length ? <>
       <ul className="place-result-list">{results.slice(0,limit).map(place=>{
         const field=fieldObservation(place.id)
-        const values=field?.readings?.map(reading=>reading.value).join(' · ')
+        const values=field?.readings?.map(reading=>reading.value)??['現場照片']
         return <li key={place.id}><button onClick={()=>onChoose(place)}>
           <span className={`place-category-icon ${place.category}`}><PlaceIcon category={place.category} size={22}/></span>
           <span className="place-result-text"><strong>{place.name}</strong>
-            {field ? <small>{values??'現場照片'}</small> : <>
+            {field ? <small>{[place.level, ...values].filter(Boolean).join(' · ')}</small> : <>
               <small>{categoryLabels[place.category]}{place.routePlaceId?' · 支援校園選路':''}</small>
               {reference&&<small>距總圖中心直線 {formatDistance(distance(reference.coordinate,place.coordinate))}</small>}
             </>}
@@ -104,7 +104,7 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
       <button className="back-link" onClick={onClose}><ArrowLeft size={17}/>{backLabel}</button>
       <button className="field-share" onClick={share}><Copy size={16}/>分享</button>
     </div>
-    <p className="field-card-date"><PlaceIcon category="field" size={16}/>實勘照片 · {formatDate(place.retrievedAt)}</p>
+    <p className="field-card-date"><PlaceIcon category="field" size={16}/>{['實勘紀錄', place.level, formatDate(place.retrievedAt)].filter(Boolean).join(' · ')}</p>
     <h1 id="place-heading" ref={heading} tabIndex={-1}>{place.name}</h1>
     {shareStatus}
     <p className="field-observation-note">{place.note}</p>

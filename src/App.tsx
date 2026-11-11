@@ -110,8 +110,9 @@ function SegmentInfo({ segment, onOpenPhoto, onSelectField }: { segment: Segment
         {segment.fieldPointIds.map(id => {
           const point = fieldObservation(id)
           if (!point) return null
+          const values = point.readings?.map(reading => reading.value) ?? ['現場照片']
           return <button key={id} onClick={() => onSelectField(id)}>
-            <span><strong>{point.name}</strong><small>{point.readings?.map(reading => reading.value).join(' · ') ?? '現場照片'}</small></span>
+            <span><strong>{point.name}</strong><small>{[point.level, ...values].filter(Boolean).join(' · ')}</small></span>
             <ChevronRight size={17} aria-hidden="true" />
           </button>
         })}

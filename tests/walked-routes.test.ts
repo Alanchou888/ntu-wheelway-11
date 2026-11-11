@@ -36,6 +36,11 @@ describe('field walk records', () => {
     expect(new Set(ids).size).toBe(12)
     expect(ids.every(id => !!fieldObservation(id))).toBe(true)
     expect(fieldObservation('field-boya-indoor-ramp')?.readings?.map(reading => reading.value)).toEqual(['89 公分', '1W'])
+    expect(fieldObservation('field-boya-indoor-ramp')?.level).toBe('一樓')
+    expect(fieldObservation('field-boya-restroom')?.level).toBe('一樓')
+    expect(fieldObservation('field-library-ramp')?.readings?.[0]).toMatchObject({
+      label: '坡道石面讀值', value: '−7°、−6°、0E',
+    })
   })
 
   it('clusters overlapping targets and separates them when zoomed in', () => {

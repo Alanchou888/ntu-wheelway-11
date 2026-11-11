@@ -30,7 +30,7 @@ export function buildWalkedRoutes(): Route[] {
         photos: fieldPointIds.length ? fieldObservation(fieldPointIds[0])?.photos ?? [] : [],
         obstacles: [], fieldPointIds,
         source: section.approximate
-          ? '依第 11 組試走紀錄連接博雅東、西側，館內線為約略示意，樓層與轉折待核對。'
+          ? '依第 11 組試走紀錄連接博雅東、西側。一樓扶手坡道已確認，館內線為約略示意，實際轉折待核對。'
           : '第 11 組 2026/11/10 試走，依口述地標與 OpenStreetMap 步道重繪。',
         sourceUrl: section.approximate ? undefined : 'https://www.openstreetmap.org/copyright',
         retrievedAt: '2026-11-10', verifiedAt: null,
