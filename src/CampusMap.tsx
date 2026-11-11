@@ -68,6 +68,7 @@ export default function CampusMap(props: Props) {
     return matches.filter(place => fieldGroupIncludes(place, props.fieldGroupIds))
   },[props.catalogPlaces,props.catalogQuery,props.catalogCategory,props.fieldGroupIds])
   const showWalkedPoints = props.mode === 'demo' && props.routes.some(route => route.walked)
+  const simulatedSlopes = props.routes.some(route => route.kind === 'demo' && !route.walked)
   const viewingFieldPoints = props.catalogCategory === 'field' ||
     props.catalogPlaces?.some(place => place.id === props.selectedPlaceId && place.category === 'field')
   const hideRouteLines = props.discoveryActive && !(showWalkedPoints && viewingFieldPoints)
@@ -203,7 +204,7 @@ export default function CampusMap(props: Props) {
         const reports=(props.communityReports??[]).filter(r=>reportMatchesSegment(r,segment,props.communitySegments))
         const active=reports.filter(r=>reportState(r).kind==='active')
         const blocked=active.some(r=>r.impact==='blocked'),difficult=active.some(r=>r.impact==='difficult')
-        const style=theme==='slope'?slopeStyle(segment.maxSlopePercent):{color:blocked?'#973628':difficult?'#a55d16':'#67778a',dashArray:blocked?'3 4':difficult?'10 4':'3 6',label:blocked?'近期有人回報無法通行':difficult?'近期有人回報通行困難':reports.length?'其他或待確認回報':'尚無回報，通行情況待確認'}
+        const style=theme==='slope'?slopeStyle(segment.maxSlopePercent):{color:blocked?'#973628':difficult?'#a55d16':'#67778a',dashArray:blocked?'3 4':difficult?'10 4':'3 6',label:blocked?'近期有人回報無法通行':difficult?'近期有人回報通行困難':reports.length?'其他社群回報':'尚無路況回報'}
         const label=document.createElement('span');label.textContent=`${segment.name}：${theme==='slope'?(segment.maxSlopePercent===null?'坡度未知':`最大坡度 ${segment.maxSlopePercent}%${props.mode==='demo'?'（示範）':''}`):style.label}`
         L.polyline(segment.coordinates.map(latlng),{color:style.color,weight:segment.id===props.segmentId?8:isSelected?6:4,opacity:focus&&!isSelected?0.5:1,dashArray:style.dashArray}).bindTooltip(label).on('click',()=>actions.current.onSelectSegment(segment.id)).addTo(group)
       })
@@ -474,7 +475,7 @@ export default function CampusMap(props: Props) {
     </div>
     {layersOpen && createPortal(<div className="layer-popover">
       <div className="layer-title">地圖圖層<button className="icon-button" onClick={() => setLayersOpen(false)} aria-label="關閉圖層選單"><X size={17} /></button></div>
-      {props.onThemeChange&&<><ThemeChooser theme={theme} onChange={next=>{props.onThemeChange?.(next);setLayersOpen(false);layerButton.current?.focus()}} /><ThemeLegend theme={theme} mode={props.mode}/></>}
+      {props.onThemeChange&&<><ThemeChooser theme={theme} onChange={next=>{props.onThemeChange?.(next);setLayersOpen(false);layerButton.current?.focus()}} /><ThemeLegend theme={theme} simulatedSlopes={simulatedSlopes}/></>}
       <label><input type="checkbox" checked={showCampus} onChange={e => setShowCampus(e.target.checked)} /><span>臺大校園建物與道路</span></label>
       <label><input type="checkbox" checked={showFacilities} disabled={theme!=='routes'} onChange={e => setShowRamps(e.target.checked)} /><span>公開斜坡道 <small>{props.campus.facilities.length} 個</small></span></label>
       <label><input type="checkbox" checked={theme==='conditions'||theme==='routes'&&showCommunity} disabled={theme!=='routes'} onChange={e=>setShowCommunity(e.target.checked)}/><span>社群路況 <small>{props.communityReports?.length??0} 則</small></span></label>
@@ -482,7 +483,7 @@ export default function CampusMap(props: Props) {
     </div>,rootRef.current?.closest('.route-workspace')??document.body)}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
     <div className={`map-legend ${theme!=='routes'?'theme-legend':''}`} aria-live="polite">
-      {theme!=='routes'?<ThemeLegend theme={theme} mode={props.mode}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />去程</span><span><i className="legend-line direct" />回程</span><span>點線：館內約略走向</span>{showWalkedPoints && <span><i className="legend-field-point" aria-hidden="true">勘</i>實勘點</span>}</> : <span><MapPin size={15} />已查核動線</span>}
+      {theme!=='routes'?<ThemeLegend theme={theme} simulatedSlopes={simulatedSlopes}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />去程</span><span><i className="legend-line direct" />回程</span><span>點線：館內約略走向</span>{showWalkedPoints && <span><i className="legend-field-point" aria-hidden="true">勘</i>實勘點</span>}</> : <span><MapPin size={15} />已查核動線</span>}
     </div>
     <div className="map-north" aria-hidden="true"><span>↑</span>N</div>
   </section>

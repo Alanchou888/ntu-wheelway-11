@@ -45,7 +45,7 @@ describe('preview presentation preserves evidence semantics', () => {
     expect(html).toContain('第 1 段 博雅入口銜接段')
     expect(html).toContain('示範路況與入口')
     expect(html).toContain('非即時定位')
-    expect(html).toContain('待補實景照片')
+    expect(html).toContain('尚無現場照片')
     expect(html).toContain('播放進度與實際行進時間無關')
   })
   it('disables animated playback for reduced motion while keeping manual segment controls', () => {

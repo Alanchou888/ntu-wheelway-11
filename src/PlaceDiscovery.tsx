@@ -59,7 +59,7 @@ export function PlaceList({catalog,results,title,onChoose,onBack,loading,error,o
   return <section className="place-results">
     <button className="back-link" onClick={onBack}><ArrowLeft size={17}/>{backLabel}</button>
     <div className="place-list-title"><h1 id="place-heading" tabIndex={-1}>{title}</h1><span>{results.length} {fieldList?'個實勘點':'個地點'}</span></div>
-    <p className="place-list-intro">{fieldList?'選擇點位，查看現場照片及量測紀錄。':'通行條件與入口仍待查核。'}</p>
+    <p className="place-list-intro">{fieldList?'選擇點位，查看現場照片及量測紀錄。':'選擇地點，查看公開圖資與設施資訊。'}</p>
     <CatalogStatus loading={loading} error={error} onRetry={onRetry}/>
     {catalog.amenitiesStatus==='unavailable'&&!results.length&&<p className="catalog-status warning">廁所、電梯、飲水與休息設施的公開資料暫時未取得。建物、地標與坡道仍可查看。</p>}
     {results.length ? <>
@@ -121,21 +121,20 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
       <summary>位置與素材來源</summary>
       <p>{field.location}</p>
       <p>{source?.label??'第 11 組實勘紀錄'} · {field.files}</p>
-      <p>個別點位的觀察與讀值，全程通行條件仍待查核。</p>
     </details>
   </article>
   return <article className="place-card">
     <div className="place-card-top"><button className="back-link" onClick={onClose}><ArrowLeft size={17}/>{backLabel}</button><button className="icon-button" onClick={onClose} aria-label="關閉地點卡片"><X size={20}/></button></div>
     <div className={`place-card-symbol ${place.category}`}><PlaceIcon category={place.category} size={30}/><span>{categoryLabels[place.category]}</span></div>
     <h1 id="place-heading" ref={heading} tabIndex={-1}>{place.name}</h1>
-    <p className="place-card-subtitle">{categoryLabels[place.category]}<span>公開點位，待實勘</span></p>
+    <p className="place-card-subtitle">{categoryLabels[place.category]}<span>公開圖資</span></p>
     <div className="place-card-actions"><button className="button primary" disabled={!place.routePlaceId} onClick={()=>onEndpoint('to')}><ArrowRight size={17}/>前往這裡</button><button className="button secondary" disabled={!place.routePlaceId} onClick={()=>onEndpoint('from')}><MapPin size={17}/>從這裡出發</button><button className="place-share" onClick={share}><Copy size={17}/>分享</button></div>
     {shareStatus}
-    <p className={`place-route-scope ${place.routePlaceId?'connected':''}`}>{place.routePlaceId?`可設定總圖與博雅之間的${mode==='demo'?'示範':'查核'}選路。建物中心與路線入口分開標示。`:'此地點尚未接入可通行路網，目前提供位置與公開資訊。'}</p>
-    <dl className="place-facts"><div><dt>位置說明</dt><dd>{place.note}</dd></div><div><dt>地址</dt><dd>{place.address??'來源尚未提供'}</dd></div><div><dt>開放時間</dt><dd>{place.openingHours??'來源尚未提供'}{place.openingHours&&<small>來源原始標記，未判讀目前是否開放</small>}</dd></div><div><dt>輪椅資訊</dt><dd>{wheelchair}{place.wheelchair&&<small>公開標記，尚未由團隊查核</small>}</dd></div>{place.level&&<div><dt>樓層標記</dt><dd>{place.level}</dd></div>}{place.widthM!==null&&<div><dt>來源路寬</dt><dd>{place.widthM} m，現況待查核</dd></div>}{place.slopePercent!==null&&<div><dt>來源坡度</dt><dd>{place.slopePercent}%，現況待查核</dd></div>}</dl>
-    {place.routePlaceId&&<section className="place-entrances"><h2>路線入口<span>{mode==='demo'?'示範位置':'實勘資料'}</span></h2>{entrances.length?<ul>{entrances.map(entrance=><li key={entrance.id}><MapPin size={17}/><div><strong>{entrance.name}</strong><p>{entrance.source}</p><small>查核日期：{formatDate(entrance.verifiedAt)}</small></div></li>)}</ul>:<p>目前沒有符合條件的路線入口。</p>}</section>}
+    <p className={`place-route-scope ${place.routePlaceId?'connected':''}`}>{place.routePlaceId?'可規劃總圖與博雅之間的路線。建物中心與路線起終點分開標示。':'目前路線涵蓋總圖與博雅，這裡可查看地點資訊。'}</p>
+    <dl className="place-facts"><div><dt>位置說明</dt><dd>{place.note}</dd></div><div><dt>地址</dt><dd>{place.address??'來源尚未提供'}</dd></div><div><dt>開放時間</dt><dd>{place.openingHours??'來源尚未提供'}{place.openingHours&&<small>公開圖資上的開放時間</small>}</dd></div><div><dt>輪椅資訊</dt><dd>{wheelchair}</dd></div>{place.level&&<div><dt>樓層標記</dt><dd>{place.level}</dd></div>}{place.widthM!==null&&<div><dt>來源路寬</dt><dd>{place.widthM} m</dd></div>}{place.slopePercent!==null&&<div><dt>來源坡度</dt><dd>{place.slopePercent}%</dd></div>}</dl>
+    {place.routePlaceId&&<section className="place-entrances"><h2>{mode==='demo'?'試走起終點':'路線入口'}</h2>{entrances.length?<ul>{entrances.map(entrance=><li key={entrance.id}><MapPin size={17}/><div><strong>{entrance.name}</strong><p>{entrance.source}</p>{entrance.verifiedAt&&<small>查核日期 {formatDate(entrance.verifiedAt)}</small>}</div></li>)}</ul>:<p>目前沒有符合條件的路線位置。</p>}</section>}
     <section className="place-photo-section"><h2>地點照片</h2><PhotoGallery photos={place.photos}/></section>
     {nearby.length>0&&<section className="place-nearby"><h2>附近設施<span>直線 250 m 內</span></h2>{nearby.map(p=><button key={p.id} onClick={()=>onChoose(p)}><PlaceIcon category={p.category} size={18}/><span>{p.name}<small>直線 {formatDistance(distance(p.coordinate,place.coordinate))}</small></span><ChevronRight size={16}/></button>)}</section>}
-    <div className="place-source"><ShieldQuestion size={18}/><div><strong>尚未實地查核</strong><p>{source?.label??'公開圖資'} · 取得 {formatDate(place.retrievedAt)}</p>{source?.status==='cached'&&<p>更新暫時失敗，保留上一版快照。</p>}<a href={place.sourceUrl} target="_blank" rel="noreferrer">查看原始來源<ArrowUpRight size={14}/></a></div></div>
+    <div className="place-source"><ShieldQuestion size={18}/><div><strong>圖資來源</strong><p>{source?.label??'公開圖資'} · 取得 {formatDate(place.retrievedAt)}</p>{source?.status==='cached'&&<p>更新暫時失敗，保留上一版快照。</p>}<a href={place.sourceUrl} target="_blank" rel="noreferrer">查看原始來源<ArrowUpRight size={14}/></a></div></div>
   </article>
 }

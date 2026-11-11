@@ -82,28 +82,36 @@ function SourceDialog({ campus, onClose }: { campus: Campus; onClose: () => void
     <div className="dialog-header"><h2 id="sources-title">資料來源與取得日期</h2><button className="icon-button" onClick={onClose} aria-label="關閉資料來源"><X size={22} /></button></div>
     <p className="dialog-intro">地圖與設施來自公開圖資。試走路線由第 11 組依地標及照片重繪。</p>
     <div className="source-list">{campus.sources.map(source => <article key={source.id} className="source-card"><div className="source-card-top"><strong>{source.label}</strong><span className={`tiny-badge ${source.status === 'cached' ? 'amber' : ''}`}>{source.status === 'cached' ? '保留快照' : '公開資料'}</span></div><p>取得日期：{formatDate(source.retrievedAt)}</p>{source.note && <p>{source.note}</p>}<a href={source.url} target="_blank" rel="noreferrer">查看原始來源 <ArrowRight size={14} /></a></article>)}</div>
-    <div className="source-explainer"><Info size={19} /><p>臺大建物座標用於地點定位。入口位置與整段路線通行條件，需另外查核。試走路段保留現場觀察，未量測的欄位顯示待查核。</p></div>
+    <div className="source-explainer"><Info size={19} /><p>臺大建物座標標示建物中心。實勘卡顯示各點的照片、觀察與單點量測。</p></div>
     <a className="text-link template-link" href="/templates/field-survey.csv" download><ClipboardCheck size={17} />下載空白實勘紀錄範本</a>
     <button className="button secondary wide" onClick={onClose}>返回地圖</button>
   </dialog>
 }
 
 function EmptyRoutes({ onDemo, onSetup, onRetry, failed, filtered }: { onDemo: () => void; onSetup: () => void; onRetry: () => void; failed: boolean; filtered: boolean }) {
-  return <div className="empty-state"><div className="empty-icon"><ClipboardCheck size={34} strokeWidth={1.5} /></div><span className="eyebrow">{filtered ? '依目前條件篩選' : '等待實勘資料'}</span><h2 id="panel-heading" tabIndex={-1}>{failed ? '查核資料暫時無法載入' : filtered ? '目前沒有符合條件的路線' : '目前無已查核路線'}</h2><p>{failed ? '圖資仍可使用。請重新載入查核資料，或先體驗示範模式。' : filtered ? '可以查看下方排除原因，再回設定調整自己的通行限制。' : '總圖至博雅的入口與路段尚待團隊實地查核。你可以先使用示範路線，體驗完整選路流程。'}</p><div className="empty-rule"><ShieldCheck size={20} /><span>{filtered ? '路線會依量測限制及你開啟的社群避開條件排除，請查看下方原因。' : '僅列出全程及兩端入口皆已查核、無階梯且未封閉的實勘路線。'}</span></div>{failed && <button className="button primary wide" onClick={onRetry}>重新載入查核資料</button>}{!filtered && <button className="button secondary wide" onClick={onDemo}>查看兩段試走路線<ArrowRight size={18} /></button>}<button className="button plain wide" onClick={onSetup}>返回設定條件</button></div>
+  return <div className="empty-state">
+    <div className="empty-icon"><ClipboardCheck size={34} strokeWidth={1.5} /></div>
+    <h2 id="panel-heading" tabIndex={-1}>{failed ? '查核資料暫時無法載入' : filtered ? '目前沒有符合條件的路線' : '目前無已查核路線'}</h2>
+    <p>{failed ? '可重新載入，或開啟試走路線。' : filtered ? '下方列出各條路線的篩除原因。' : '可查看第 11 組的去回程與沿途實勘點。'}</p>
+    {!filtered && !failed && <div className="empty-rule"><ShieldCheck size={20} /><span>僅列出全程及兩端入口皆已查核、無階梯且開放通行的路線。</span></div>}
+    {failed && <button className="button primary wide" onClick={onRetry}>重新載入查核資料</button>}
+    {!filtered && <button className="button secondary wide" onClick={onDemo}>查看試走路線<ArrowRight size={18} /></button>}
+    <button className="button plain wide" onClick={onSetup}>返回設定條件</button>
+  </div>
 }
 
-function EntranceCard({ entrance, letter }: { entrance: Entrance; letter: string }) {
-  return <details className="entrance-card"><summary><span className="entry-letter">{letter}</span><div><span>{letter === 'A' ? '起點入口' : '終點入口'}</span><strong>{entrance.name}</strong></div><ChevronDown size={17} /></summary><div className="entry-body"><p>{entrance.source}</p><p>查核日期：{formatDate(entrance.verifiedAt)}</p><PhotoGallery key={entrance.id} photos={entrance.photos} /></div></details>
+function EntranceCard({ entrance, letter, walked }: { entrance: Entrance; letter: string; walked?: boolean }) {
+  return <details className="entrance-card"><summary><span className="entry-letter">{letter}</span><div><span>{letter === 'A' ? '起點' : '終點'}{!walked && '入口'}</span><strong>{entrance.name}</strong></div><ChevronDown size={17} /></summary><div className="entry-body"><p>{entrance.source}</p>{entrance.verifiedAt && <p>查核日期 {formatDate(entrance.verifiedAt)}</p>}<PhotoGallery key={entrance.id} photos={entrance.photos} /></div></details>
 }
 
 function SegmentInfo({ segment, onOpenPhoto, onSelectField }: { segment: Segment; onOpenPhoto: () => void; onSelectField: (id: string) => void }) {
   const facts = [
     ['最大坡度', metricValue(segment.maxSlopePercent, '%')], ['有效路寬', metricValue(segment.minWidthM, ' m')],
     ['最大階差', metricValue(segment.stepHeightCm, ' cm')], ['坡道長度', metricValue(segment.rampLengthM, ' m')],
-    ['路面條件', segment.surface ?? '尚無資料'], ['階梯', segment.hasStairs === null ? '尚未確認' : segment.hasStairs ? '有階梯' : '無階梯'],
+    ['路面條件', segment.surface ?? '尚無資料'], ['階梯', segment.hasStairs === null ? '無紀錄' : segment.hasStairs ? '有階梯' : '無階梯'],
   ]
   const measurements = <dl className="fact-grid">{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-  return <article className={`segment-info ${segment.fieldPointIds ? 'walked-segment-info' : ''}`}><div className="section-heading"><h3>{segment.name}</h3><span className={`tiny-badge ${segment.status === 'demo' ? 'amber' : ''}`}>{segmentLabel(segment)}</span></div>
+  return <article className={`segment-info ${segment.fieldPointIds ? 'walked-segment-info' : ''}`}><div className="section-heading"><h3>{segment.name}</h3>{!segment.fieldPointIds && <span className={`tiny-badge ${segment.status === 'demo' ? 'amber' : ''}`}>{segmentLabel(segment)}</span>}</div>
     {segment.fieldPointIds ? <>
       {segment.fieldPointIds.length ? <div className="segment-field-links" role="group" aria-label="這段附近的實勘點">
         <p>這段附近的實勘點</p>
@@ -116,13 +124,16 @@ function SegmentInfo({ segment, onOpenPhoto, onSelectField }: { segment: Segment
             <ChevronRight size={17} aria-hidden="true" />
           </button>
         })}
-      </div> : <p className="segment-no-points">這段暫無獨立實勘點。</p>}
-      <details className="evidence-details segment-measurements"><summary>全段通行條件待查核<ChevronDown size={15} /></summary>{measurements}</details>
+      </div> : <p className="segment-no-points">這段沒有獨立實勘點。</p>}
+      <details className="evidence-details segment-measurements"><summary>全段通行資料<ChevronDown size={15} /></summary>{measurements}</details>
     </> : <>{measurements}
       <PhotoGallery key={segment.id} photos={segment.photos} onOpen={onOpenPhoto} />
-      <div className={`obstacle-note ${segment.obstacles.length ? 'has-obstacle' : ''}`}><Info size={17} /><p>{segment.obstacles.length ? segment.obstacles.join('、') : segment.status === 'demo' ? '此段未設定額外障礙，實際情況待查核。' : '這段的固定障礙待確認。'}</p></div>
+      <div className={`obstacle-note ${segment.obstacles.length ? 'has-obstacle' : ''}`}><Info size={17} /><p>{segment.obstacles.join('、') || '沒有障礙紀錄。'}</p></div>
     </>}
-    <details className="evidence-details"><summary>資料依據與查核資訊<ChevronDown size={15} /></summary><div><p><span>查核狀態</span>{segmentLabel(segment)}</p><p><span>查核日期</span>{formatDate(segment.verifiedAt)}</p><p><span>圖資取得</span>{formatDate(segment.retrievedAt)}</p><p className="source-text">{segment.source}</p>{segment.sourceUrl && <a href={segment.sourceUrl} target="_blank" rel="noreferrer">查看來源 <ArrowRight size={13} /></a>}</div></details>
+    <details className="evidence-details"><summary>{segment.fieldPointIds ? '路線繪製依據' : '資料依據與查核資訊'}<ChevronDown size={15} /></summary><div>
+      {!segment.fieldPointIds && <><p><span>查核狀態</span>{segmentLabel(segment)}</p><p><span>查核日期</span>{formatDate(segment.verifiedAt)}</p><p><span>圖資取得</span>{formatDate(segment.retrievedAt)}</p></>}
+      <p className="source-text">{segment.source}</p>{segment.sourceUrl && <a href={segment.sourceUrl} target="_blank" rel="noreferrer">查看來源 <ArrowRight size={13} /></a>}
+    </div></details>
   </article>
 }
 
@@ -321,7 +332,7 @@ export default function App() {
     requestAnimationFrame(()=>document.getElementById('panel-heading')?.focus({preventScroll:true}))
   }
   const placeEntrances=selectedPlace?.routePlaceId?[...new Map(routes.flatMap(route=>[route.originEntrance,route.destinationEntrance]).filter(entrance=>entrance.placeId===selectedPlace.routePlaceId).map(entrance=>[entrance.id,entrance])).values()]:[]
-  const collapsedPlace=discovering?<div className="sheet-route-summary"><div><strong>{selectedPlace?.name??(state.category?`附近${categoryLabels[state.category]}`:'搜尋地點')}</strong><span>{selectedPlace?(selectedPlace.category==='field'?'現場紀錄，路線仍待查核':'公開點位，通行狀態待查核'):`${foundPlaces.length} 個符合的地點`}</span></div><button onClick={()=>setSheetSize('half')}>查看地點</button></div>:null
+  const collapsedPlace=discovering?<div className="sheet-route-summary"><div><strong>{selectedPlace?.name??(state.category?`附近${categoryLabels[state.category]}`:'搜尋地點')}</strong><span>{selectedPlace?(selectedPlace.category==='field'?'現場紀錄':'公開點位'):`${foundPlaces.length} 個符合的地點`}</span></div><button onClick={()=>setSheetSize('half')}>查看地點</button></div>:null
 
   return <div className={`app ${campus && step >= 0 ? 'map-experience' : ''}`}>
     <a href="#content-panel" className="skip-link" onClick={e => { e.preventDefault(); setSheetSize('full'); requestAnimationFrame(() => document.getElementById('content-panel')?.focus()) }}>跳至操作內容</a>
@@ -333,7 +344,7 @@ export default function App() {
     {step >= 0 && <div className="journey-bar"><nav className="stepper" aria-label="選路流程">{screens.map((item, i) => { const Icon = item.icon; return <button key={item.id} className={`step ${i === step ? 'current' : ''} ${i < step ? 'completed' : ''}`} disabled={i > step} aria-label={`步驟 ${i + 1}：${item.label}`} aria-current={i === step ? 'step' : undefined} onClick={() => navigate({ screen: item.id })}><span className="step-index" aria-hidden="true">{i < step ? <Check size={13} /> : i + 1}</span><Icon size={16} className="step-icon" aria-hidden="true" /><span className="step-label">{item.label}</span>{i < 3 && <ChevronRight size={13} className="step-chevron" aria-hidden="true" />}</button> })}</nav>
       <div className="mode-switch" role="group" aria-label="資料模式"><button className={isDemo ? 'selected' : ''} aria-pressed={isDemo} onClick={() => chooseMode('demo')}>試走紀錄</button><button className={!isDemo ? 'selected' : ''} aria-pressed={!isDemo} onClick={() => chooseMode('survey')}>已查核路線</button></div>
     </div>}
-    <div className={`mode-strip ${isDemo && step >= 0 ? 'demo' : 'survey'}`} role="status">{state.screen === 'editor' ? <><ClipboardCheck size={16} aria-hidden="true" /><strong>本機實勘草稿</strong><span>填寫後匯出，交由團隊審核</span></> : step < 0 ? <><Info size={16} aria-hidden="true" /><strong>校園試用版</strong><span>總圖書館與博雅教學館周邊</span></> : isDemo ? <><TriangleAlert size={16} aria-hidden="true" /><strong>試走紀錄</strong><span>依實際走法重繪，通行條件待查核</span></> : <><ShieldCheck size={16} aria-hidden="true" /><strong>查核模式</strong><span>全程及兩端入口均需有實勘證據</span></>}</div>
+    <div className={`mode-strip ${isDemo && step >= 0 ? 'demo' : 'survey'}`} role="status">{state.screen === 'editor' ? <><ClipboardCheck size={16} aria-hidden="true" /><strong>本機實勘草稿</strong><span>填寫後匯出，交由團隊審核</span></> : step < 0 ? <><Info size={16} aria-hidden="true" /><strong>臺大校園</strong><span>總圖書館與博雅教學館周邊</span></> : isDemo ? <><Footprints size={16} aria-hidden="true" /><strong>試走紀錄</strong><span>依第 11 組實際走法重繪</span></> : <><ShieldCheck size={16} aria-hidden="true" /><strong>查核模式</strong><span>全程及兩端入口均需有實勘證據</span></>}</div>
 
     {state.screen === 'help' ? <HelpPage onDemo={() => navigate({ screen: 'setup', mode: 'demo', routeId: '', segmentId: '' })} onEditor={() => navigate({ screen: 'editor' })} onSources={() => setShowSources(true)} /> : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={allRoutes} onOpen={favorite => navigate(fromHash(favorite.hash))} onRemove={key => { const previous = favorites; if (persistFavorites(favorites.filter(f => f.key !== key))) { setUndoFavorites(previous); setFavoriteMessage('已移除收藏，可立即復原。') } }} onUndo={() => { if (undoFavorites && persistFavorites(undoFavorites)) { setUndoFavorites(null); setFavoriteMessage('已復原收藏。') } }} canUndo={!!undoFavorites} onPlan={() => navigate({ screen: 'setup' })} feedback={favoriteMessage} /> : loading && !campus ? <main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>正在展開校園地圖</h1><p>載入公開圖資與路段資料快照</p></main> : loadError && !campus || !campus ? <main className="app-loading error-state"><TriangleAlert size={32} /><h1>圖資暫時無法載入</h1><p>請確認網路連線，再試一次。你也可以先閱讀使用說明。</p><button className="button primary" onClick={retryCampus}>重新載入圖資</button><button className="button secondary" onClick={() => navigate({ screen: 'help' })}>使用說明</button></main> : state.screen === 'editor' ? <Suspense fallback={<main className="app-loading"><LoaderCircle className="spinner" size={28} /><h1>載入實勘編輯器</h1></main>}><SurveyEditor campus={campus} onClose={() => navigate({ screen: 'setup' })} /></Suspense> : <main className={`workspace route-workspace ${catalog?'has-discovery':''}`} data-discovering={discovering} data-sheet={sheetSize} data-screen={state.screen}>
       <MapSheet label={discovering?'地點資訊':state.screen==='setup'?'路線設定':undefined} size={sheetSize} onSize={setSheetSize} mobile={mobile} panelRef={panelRef} collapsed={discovering?collapsedPlace: state.screen === 'compare' && isDemo && routes.length > 0 ? <WalkedRoutePicker routes={routes} onOpen={openRoute} /> : tourRoute ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} /> : <div className="sheet-route-summary"><div><strong>{state.screen === 'setup' ? '規劃校園路線' : routes.length ? `${routes.length} 條${isDemo ? '試走' : '查核'}路線` : '目前無可用路線'}</strong><span>{placeNames[state.origin]} → {placeNames[destination]}</span></div><button onClick={() => setSheetSize('half')}>{state.screen === 'setup' ? '設定條件' : '查看資訊'}</button></div>}>
@@ -343,7 +354,7 @@ export default function App() {
           {discovering&&catalog&&(selectedPlace?<PlaceCard key={selectedPlace.id} place={selectedPlace} catalog={catalog} entrances={placeEntrances} mode={state.mode} onClose={closePlace} backLabel={state.category ? '返回點位清單' : state.screen === 'detail' ? '返回路段' : '返回路線地圖'} onEndpoint={setPlaceEndpoint} onChoose={choosePlace} shareUrl={window.location.origin+window.location.pathname+toHash({...state,placeId:selectedPlace.id,category:undefined})}/>:state.placeId?<section className="place-empty"><h1 id="place-heading" tabIndex={-1}>{placeData.loading?'正在載入地點':'這個地點目前無法開啟'}</h1><p>地點連結可能已變更，或資料快照尚未載入。可重新搜尋或返回路線。</p><CatalogStatus loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/><button className="button secondary wide" onClick={clearDiscovery}>返回路線規劃</button></section>:<PlaceList key={state.category??placeQuery} catalog={catalog} results={foundPlaces} title={placeQuery.trim()?'搜尋結果':state.category==='field'?(fieldGroup?'附近實勘點':'實勘點') :state.category?`附近${categoryLabels[state.category]}`:'校園地點'} onChoose={choosePlace} onBack={clearDiscovery} fieldList={state.category==='field'} showAllFieldPoints={showAllFieldPoints} backLabel={state.screen==='setup'?'返回路線規劃':'返回路線地圖'} loading={placeData.loading} error={placeData.error} onRetry={placeData.retry}/>)}
           <div className="route-panel-content" hidden={discovering}>
           {state.screen === 'setup' && <>
-            <h1 id="panel-heading" tabIndex={-1}>規劃校園路線</h1><p className="panel-intro">選擇起終點，再比較沿途的通行條件。</p>
+            <h1 id="panel-heading" tabIndex={-1}>規劃校園路線</h1><p className="panel-intro">{isDemo ? '選擇起終點，查看去回程與沿途實勘。' : '選擇起終點，再比較沿途的通行條件。'}</p>
             <form id="route-planner" onSubmit={e => { e.preventDefault(); query() }} className="route-form">
               <div className="location-fields"><label className="location-field"><span className="location-letter">A</span><span className="field-content"><span>起點</span><select aria-label="起點" value={state.origin} onChange={e => navigate({ origin: e.target.value === 'boya' ? 'boya' : 'library' })}><option value="library">{isDemo ? '總圖前廣場' : '總圖書館'}</option><option value="boya">{isDemo ? '博雅教學館西側' : '博雅教學館'}</option></select></span></label><div className="location-connector" aria-hidden="true" /><label className="location-field"><span className="location-letter end">B</span><span className="field-content"><span>終點</span><select aria-label="終點" value={destination} onChange={e => navigate({ origin: e.target.value === 'library' ? 'boya' : 'library' })}><option value="library">{isDemo ? '總圖前廣場' : '總圖書館'}</option><option value="boya">{isDemo ? '博雅教學館西側' : '博雅教學館'}</option></select></span></label><button type="button" className="swap-button" aria-label="交換起點與終點" onClick={() => navigate({ origin: destination })}><ArrowDownUp size={18} /></button></div>
               <fieldset className="form-section"><legend>移動需求<span>僅註記需求</span></legend><div className="chair-options">{[{ value: 'manual' as const, label: '手動輪椅', icon: Accessibility }, { value: 'electric' as const, label: '電動輪椅', icon: Zap }].map(item => <label key={item.value} className={state.wheelchair === item.value ? 'checked' : ''}><input type="radio" name="wheelchair" value={item.value} checked={state.wheelchair === item.value} onChange={() => navigate({ wheelchair: item.value })} /><item.icon size={19} /><span>{item.label}</span><i className="radio-dot" /></label>)}</div></fieldset>
@@ -401,13 +412,13 @@ export default function App() {
           </>}
 
           {state.screen === 'confirm' && !resolved.problem && selected && (isDemo || !surveyLoading) && <>
-            <button className="back-link" onClick={() => navigate({ screen: 'compare' })}><ArrowLeft size={17} aria-hidden="true" />返回比較</button><h1 id="panel-heading" tabIndex={-1}>確認路線</h1><p className="panel-intro confirm-intro">核對兩端入口與沿途條件，再保存這條路線。</p>
+            <button className="back-link" onClick={() => navigate({ screen: 'compare' })}><ArrowLeft size={17} aria-hidden="true" />返回比較</button><h1 id="panel-heading" tabIndex={-1}>確認路線</h1><p className="panel-intro confirm-intro">{selected.walked ? '查看起終點及沿途實勘。' : '核對兩端入口與沿途條件，再保存這條路線。'}</p>
             <div className="confirmed-route"><div className="section-heading"><strong>{selected.name}</strong><span className={`tiny-badge ${isDemo ? 'amber' : ''}`}>{isDemo ? '試走紀錄' : '已查核'}</span></div><RouteStats route={selected} compact /></div>
-            <div className="entry-cards"><EntranceCard entrance={selected.originEntrance} letter="A" /><div className="entry-connector" /><EntranceCard entrance={selected.destinationEntrance} letter="B" /></div>
+            <div className="entry-cards"><EntranceCard entrance={selected.originEntrance} letter="A" walked={selected.walked} /><div className="entry-connector" /><EntranceCard entrance={selected.destinationEntrance} letter="B" walked={selected.walked} /></div>
             <div className="section-heading confirm-segments-title"><h3>沿途路段</h3><span>{selected.segments.length} 段</span></div><div className="confirm-segments">{selected.segments.map((segment, i) => <button key={segment.id} onClick={() => navigate({ screen: 'detail', segmentId: segment.id })}><span>{i + 1}</span><strong>{segment.name}</strong><span>{formatDistance(lineDistance(segment.coordinates))}</span><ChevronRight size={16} /></button>)}</div>
             {mobilePreview}
             {selected.kind === 'survey' && <p className="verification-age">全程最舊查核日期 {formatDate(oldestVerification(selected))}，距今 {daysSince(oldestVerification(selected)!)} 天。</p>}
-            <div className="sticky-panel-actions"><button className="button primary wide" onClick={copyLink}><Copy size={18} />複製路線連結</button><div className="confirm-extra-actions"><button className="button secondary" onClick={saveFavorite}><Bookmark size={17} />收藏這條路線</button><button className="button secondary" onClick={() => window.print()}><Printer size={17} />列印路線</button></div>{favoriteMessage && <p className="copy-feedback" role="status">{favoriteMessage}</p>}{copyMessage && <p className="copy-feedback" role="status"><CheckCircle2 size={15} />{copyMessage}</p>}{copyFallback && <input className="copy-fallback" aria-label="路線連結" readOnly value={`${window.location.origin}${window.location.pathname}${toHash({ ...state, routeId: selected.id })}`} onFocus={e => e.target.select()} />}<p className="form-footnote">出發前請確認入口與現場路況。</p></div>
+            <div className="sticky-panel-actions"><button className="button primary wide" onClick={copyLink}><Copy size={18} />複製路線連結</button><div className="confirm-extra-actions"><button className="button secondary" onClick={saveFavorite}><Bookmark size={17} />收藏這條路線</button><button className="button secondary" onClick={() => window.print()}><Printer size={17} />列印路線</button></div>{favoriteMessage && <p className="copy-feedback" role="status">{favoriteMessage}</p>}{copyMessage && <p className="copy-feedback" role="status"><CheckCircle2 size={15} />{copyMessage}</p>}{copyFallback && <input className="copy-fallback" aria-label="路線連結" readOnly value={`${window.location.origin}${window.location.pathname}${toHash({ ...state, routeId: selected.id })}`} onFocus={e => e.target.select()} />}<p className="form-footnote">{selected.walked ? '館內虛線為約略走向。' : '出發前請確認入口與現場路況。'}</p></div>
           </>}
         </div></div>
         {!discovering && state.screen === 'setup' && <div className="setup-actions"><button type="submit" form="route-planner" className="button primary wide search-button">{isDemo ? '查看試走路線' : '比較路線'}<ArrowRight size={19} aria-hidden="true" /></button><p className="form-footnote">{isDemo ? '博雅館內虛線為約略走向。' : '未查核路段不列入候選路線。'}</p></div>}
