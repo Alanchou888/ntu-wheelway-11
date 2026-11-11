@@ -100,6 +100,7 @@
 .route-workspace>.layer-popover{z-index:950}
 .catalog-map-marker.field-marker > span { border-color: #0e766a; color: #0e6259; background: #effcf8; }
 .catalog-map-marker.field-marker.selected > span { color: #fff; background: #0e766a; }
+.legend-field-point { display: grid; place-items: center; width: 19px; height: 20px; border: 1px solid #0e766a; border-radius: 6px; color: #0e6259; background: #effcf8; font-size: 10px; font-style: normal; }
 .place-category-icon.field { color: #0e6259; background: #e2f4ee; }
 .place-card-actions.field-actions { display: flex; margin: 12px 0; }
 .field-actions .place-share { min-height: 44px; padding: 0 14px; }

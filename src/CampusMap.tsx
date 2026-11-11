@@ -61,6 +61,10 @@ export default function CampusMap(props: Props) {
   const theme=props.mapTheme??'routes'
   const showFacilities=theme==='facilities'||(theme==='routes'&&showRamps)
   const catalogMatches=useMemo(()=>props.catalogPlaces?findPlaces(props.catalogPlaces,props.catalogQuery,props.catalogCategory):[],[props.catalogPlaces,props.catalogQuery,props.catalogCategory])
+  const showWalkedPoints = props.mode === 'demo' && props.routes.some(route => route.walked)
+  const viewingFieldPoints = props.catalogCategory === 'field' ||
+    props.catalogPlaces?.some(place => place.id === props.selectedPlaceId && place.category === 'field')
+  const hideRouteLines = props.discoveryActive && !(showWalkedPoints && viewingFieldPoints)
   const geometryKey = JSON.stringify(props.routes.map(routeCoordinates))
 
   const visiblePadding = () => {
@@ -175,7 +179,7 @@ export default function CampusMap(props: Props) {
     const group = routesRef.current
     if (!group) return
     group.clearLayers()
-    if(props.discoveryActive)return
+    if(hideRouteLines)return
     const focus = props.screen === 'detail' || props.screen === 'confirm'
     const selected = props.routes.find(r => r.id === props.selectedId) ?? props.routes[0]
     props.routes.forEach(route => {
@@ -244,7 +248,7 @@ export default function CampusMap(props: Props) {
         L.circleMarker(latlng(place.coordinate), { radius: 7, color: '#fff', weight: 2, fillColor: '#6d8277', fillOpacity: 1 }).bindTooltip(label, { permanent: true, direction: 'top', className: 'entrance-label' }).addTo(group)
       })
     }
-  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus,props.discoveryActive,theme,props.communityReports,props.communitySegments])
+  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus,hideRouteLines,theme,props.communityReports,props.communitySegments])
 
   useEffect(() => {
     const group = facilitiesRef.current
@@ -289,7 +293,15 @@ export default function CampusMap(props: Props) {
     }
     const filtered=!!props.catalogCategory||!!props.catalogQuery?.trim()
     const bounds=mapRef.current?.getBounds().pad(.05)
-    const shown=props.catalogPlaces.filter(p=>p.id===props.selectedPlaceId||(bounds?.contains(latlng(p.coordinate))&&(filtered?catalogMatches.some(match=>match.id===p.id):theme==='facilities'?p.category!=='building'&&p.category!=='landmark':!!p.routePlaceId||showFacilities&&p.category==='ramp'||zoom>=17&&p.category==='landmark'||zoom>=19&&p.category==='building')))
+    const shown = props.catalogPlaces.filter(place => {
+      if (place.id === props.selectedPlaceId) return true
+      if (!bounds?.contains(latlng(place.coordinate))) return false
+      if (filtered) return catalogMatches.some(match => match.id === place.id)
+      if (showWalkedPoints && place.category === 'field') return true
+      if (theme === 'facilities') return place.category !== 'building' && place.category !== 'landmark'
+      return !!place.routePlaceId || showFacilities && place.category === 'ramp' ||
+        zoom >= 17 && place.category === 'landmark' || zoom >= 19 && place.category === 'building'
+    })
     for(const place of shown){
       const active=place.id===props.selectedPlaceId
       const element=document.createElement('span');element.textContent=({building:'館',toilet:'廁',elevator:'梯',water:'水',rest:'休',ramp:'坡',landmark:'景',field:'勘'} as const)[place.category]
@@ -301,7 +313,7 @@ export default function CampusMap(props: Props) {
       target?.setAttribute('aria-label',`開啟地點：${place.name}，${categoryLabels[place.category]}`)
       if(target)L.DomEvent.on(target,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key==='Enter'||key===' '){L.DomEvent.preventDefault(event);actions.current.onSelectPlace?.(place.id)}})
     }
-  },[props.catalogPlaces,props.catalogCategory,props.catalogQuery,props.selectedPlaceId,props.campus,catalogMatches,showFacilities,theme,zoom,viewRevision])
+  },[props.catalogPlaces,props.catalogCategory,props.catalogQuery,props.selectedPlaceId,props.campus,catalogMatches,showFacilities,showWalkedPoints,theme,zoom,viewRevision])
 
   useEffect(()=>{
     if(!props.discoveryActive)return
@@ -428,7 +440,7 @@ export default function CampusMap(props: Props) {
     </div>,rootRef.current?.closest('.route-workspace')??document.body)}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
     <div className={`map-legend ${theme!=='routes'?'theme-legend':''}`} aria-live="polite">
-      {theme!=='routes'?<ThemeLegend theme={theme} mode={props.mode}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />去程</span><span><i className="legend-line direct" />回程</span><span>點線：館內約略走向</span></> : <span><MapPin size={15} />已查核動線</span>}
+      {theme!=='routes'?<ThemeLegend theme={theme} mode={props.mode}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />去程</span><span><i className="legend-line direct" />回程</span><span>點線：館內約略走向</span>{showWalkedPoints && <span><i className="legend-field-point" aria-hidden="true">勘</i>實勘點</span>}</> : <span><MapPin size={15} />已查核動線</span>}
     </div>
     <div className="map-north" aria-hidden="true"><span>↑</span>N</div>
   </section>
