@@ -1,4 +1,4 @@
-import type { CatalogPlace, Coordinate, Photo, PlaceCatalog, PublicSource } from './types'
+import type { CatalogCategory, CatalogPlace, Coordinate, Photo, PlaceCatalog, PublicSource } from './types'
 
 const date = '2026-11-10'
 const folder = '/field/2026-11-10'
@@ -15,6 +15,7 @@ interface Observation {
   note: string
   location: string
   level?: string
+  facilityCategory?: Exclude<CatalogCategory, 'field'>
   files: string
   photos: Photo[]
   readings?: { label: string; value: string; context: string }[]
@@ -29,6 +30,7 @@ const observations: Observation[] = [
   {
     id: 'field-library-ramp',
     name: '總圖階梯旁無障礙坡道',
+    facilityCategory: 'ramp',
     coordinate: [121.540236, 25.017225],
     location: '組員確認量測位置在總圖階梯旁無障礙坡道。地圖依同場照片 GPS 估位。',
     files: 'IMG_0958、IMG_9227（試走影片），IMG_0961、IMG_0963、IMG_0964（手機量測照片）',
@@ -62,6 +64,7 @@ const observations: Observation[] = [
   {
     id: 'field-boya-ramp',
     name: '博雅東側戶外坡道',
+    facilityCategory: 'ramp',
     coordinate: [121.537278, 25.018922],
     location: '坡道照片 GPS，對照博雅東側建物與階梯',
     files: 'IMG_5061、IMG_5063、IMG_9237（影片），IMG_5062、IMG_3122（照片）',
@@ -74,6 +77,7 @@ const observations: Observation[] = [
   {
     id: 'field-boya-indoor-ramp',
     name: '博雅館內扶手坡道',
+    facilityCategory: 'ramp',
     coordinate: [121.537003, 25.018886],
     level: '一樓',
     location: '位於博雅教學館一樓。圖釘依 IMG_9238 中量測手機的座標估位。',
@@ -89,6 +93,7 @@ const observations: Observation[] = [
   {
     id: 'field-boya-restroom',
     name: '博雅館內廁所門口',
+    facilityCategory: 'toilet',
     coordinate: [121.5366969, 25.01889],
     level: '一樓',
     location: '位於博雅教學館一樓。圖釘標在建物中心。',

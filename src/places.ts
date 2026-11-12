@@ -1,4 +1,5 @@
 import type {Campus,CatalogCategory,CatalogPlace,NavigationState,PlaceCatalog} from './types'
+import {fieldObservation} from './field-observations'
 import {distance} from './routes'
 
 export const categoryLabels:Record<CatalogCategory,string>={building:'建物',toilet:'廁所',elevator:'電梯',water:'飲水',rest:'休息',ramp:'坡道',landmark:'地標',field:'實勘點'}
@@ -24,11 +25,21 @@ export function fallbackPlaces(campus:Campus):PlaceCatalog{
   const source=(id:string)=>campus.sources.find(s=>s.id===id)!
   return{version:1,bbox:[121.534,25.014,121.543,25.021],sources:campus.sources,places:[...campus.places.map(p=>({...base,id:p.id,name:p.name,aliases:p.id==='library'?['總圖','NTU Library']:['博雅','Boya'],category:'building' as const,coordinate:p.coordinate,routePlaceId:p.id,sourceId:p.sourceId,sourceUrl:source(p.sourceId).url,retrievedAt:source(p.sourceId).retrievedAt,note:'建物中心位置，入口需另外確認。'})),...campus.facilities.map(p=>({...base,id:p.id,name:p.name,aliases:['坡道','斜坡道'],category:'ramp' as const,coordinate:p.coordinate,routePlaceId:null,sourceId:p.sourceId,sourceUrl:source(p.sourceId).url,retrievedAt:source(p.sourceId).retrievedAt,widthM:p.widthM,slopePercent:p.slopePercent,note:'公開斜坡道，尚未實地查核。'}))]}
 }
+export function placeCategories(place: CatalogPlace): CatalogCategory[] {
+  const facilityCategory = place.category === 'field' ? fieldObservation(place.id)?.facilityCategory : undefined
+  return facilityCategory ? [place.category, facilityCategory] : [place.category]
+}
+
 export function findPlaces(places:CatalogPlace[],query='',category?:CatalogCategory):CatalogPlace[]{
   const words=query.trim().split(/\s+/).filter(Boolean).map(canonical).filter(Boolean)
   const reference=places.find(p=>p.id==='library')?.coordinate
   const score=(p:CatalogPlace)=>{const names=[p.name,...p.aliases].map(canonical),whole=canonical(query);return words.length?(names[0]===whole?0:names.includes(whole)?1:words.some(w=>names.some(name=>name.startsWith(w)))?2:3):p.routePlaceId?0:1}
-  return places.filter(p=>!category||p.category===category).filter(p=>{const haystack=canonical([p.name,...p.aliases,categoryLabels[p.category],p.address??''].join(' '));return words.every(w=>haystack.includes(w))}).sort((a,b)=>score(a)-score(b)||(reference?distance(a.coordinate,reference)-distance(b.coordinate,reference):0)||a.id.localeCompare(b.id))
+  return places.filter(place => {
+    const categories = placeCategories(place)
+    if (category && !categories.includes(category)) return false
+    const haystack = canonical([place.name, ...place.aliases, ...categories.map(value => categoryLabels[value]), place.address ?? ''].join(' '))
+    return words.every(word => haystack.includes(word))
+  }).sort((a,b)=>score(a)-score(b)||(reference?distance(a.coordinate,reference)-distance(b.coordinate,reference):0)||a.id.localeCompare(b.id))
 }
 const RECENT_KEY='wheelway-recent-places-v1'
 export function readRecentPlaces(places:CatalogPlace[]):string[]{

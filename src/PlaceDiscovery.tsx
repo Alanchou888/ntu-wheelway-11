@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react'
 import {ArrowLeft,ArrowRight,ArrowUpDown,ArrowUpRight,Armchair,Building2,Camera,ChevronDown,ChevronRight,Clock,Copy,Droplets,MapPin,Search,Toilet,X} from 'lucide-react'
 import type {LucideIcon} from 'lucide-react'
 import type {CatalogCategory,CatalogPlace,Entrance,Mode,PlaceCatalog} from './types'
-import {categoryLabels,findPlaces} from './places'
+import {categoryLabels,findPlaces,placeCategories} from './places'
 import {distance,formatDate,formatDistance} from './routes'
 import {fieldObservation} from './field-observations'
 import PhotoGallery from './PhotoGallery'
@@ -22,7 +22,7 @@ export function PlaceSearch({places,query,category,selected,recent,onQuery,onCho
   const [active,setActive]=useState(-1)
   const root=useRef<HTMLDivElement>(null)
   const more=useRef<HTMLDetailsElement>(null)
-  const availableCategories=new Set(places.map(place=>place.category))
+  const availableCategories=new Set(places.flatMap(placeCategories))
   const quickCategories=facilityCategories.filter(value=>(value==='field'||value==='ramp')&&availableCategories.has(value))
   const extraCategories=facilityCategories.filter(value=>!quickCategories.includes(value))
   const matched=findPlaces(places,query)
@@ -98,7 +98,7 @@ export function PlaceList({catalog,results,category,title,onChoose,onBack,loadin
       {results.length>limit&&<button className="button secondary wide" onClick={()=>setLimit(n=>n+45)}>顯示更多地點</button>}
     </> : !loading && <div className="place-empty"><Search size={30} aria-hidden="true"/><p>{category?`目前沒有${categoryLabels[category]}點位資料。`:'找不到符合的地點。可試試其他關鍵字。'}</p></div>}
     {showAllFieldPoints&&<button className="button secondary wide field-show-all" onClick={showAllFieldPoints}>查看全部實勘點</button>}
-    {!fieldList&&results.length>0&&<p className="place-data-note">清單顯示直線距離。</p>}
+    {reference&&results.some(place=>place.category!=='field')&&<p className="place-data-note">清單顯示直線距離。</p>}
   </section>
 }
 
