@@ -12,7 +12,9 @@ const lines = new Map(segments.map(segment => [segment.id, segment.coordinates])
 interface Env extends CommunityEnv { ASSETS: { fetch(request: Request): Promise<Response> } }
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (new URL(request.url).pathname.startsWith('/api/community/')) return communityApi(request,env,ids,lines)
+    const path = new URL(request.url).pathname
+    if (path.startsWith('/api/community/')) return communityApi(request,env,ids,lines)
+    if (/^\/(?:team|templates)(?:\/|$)/.test(path)) return new Response('Not found', { status: 404 })
     return env.ASSETS.fetch(request)
   },
 }

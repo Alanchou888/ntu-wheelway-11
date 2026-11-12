@@ -18,7 +18,7 @@ const routes = campus.paths.map(path => {
       status: 'unverified', maxSlopePercent: null, minWidthM: null, stepHeightCm: null, hasStairs: null, surface: null,
       rampLengthM: null, closed: null, obstacles: [], photos: [], source: '待團隊實勘', sourceUrl: 'https://www.openstreetmap.org/copyright', retrievedAt: campus.retrievedAt, verifiedAt: null })) }
 })
-const target = resolve(root, 'public/templates/survey-template.json')
+const target = resolve(root, 'docs/templates/survey-template.json')
 await mkdir(dirname(target), { recursive: true })
 await writeFile(target, JSON.stringify({ version: 1, routes }, null, 2) + '\n', 'utf8')
-console.log('Created public/templates/survey-template.json. All survey conditions remain unknown and unverified. No active route data was changed.')
+console.log('Created docs/templates/survey-template.json.')

@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react'
-import {ArrowLeft,ArrowRight,ArrowUpDown,ArrowUpRight,Armchair,Building2,Camera,ChevronRight,Clock,Copy,Droplets,MapPin,Search,ShieldQuestion,Toilet,X} from 'lucide-react'
+import {ArrowLeft,ArrowRight,ArrowUpDown,ArrowUpRight,Armchair,Building2,Camera,ChevronDown,ChevronRight,Clock,Copy,Droplets,MapPin,Search,Toilet,X} from 'lucide-react'
 import type {LucideIcon} from 'lucide-react'
 import type {CatalogCategory,CatalogPlace,Entrance,Mode,PlaceCatalog} from './types'
 import {categoryLabels,findPlaces} from './places'
@@ -9,7 +9,7 @@ import PhotoGallery from './PhotoGallery'
 import './place-discovery.css'
 
 const categoryIcons:Record<CatalogCategory,LucideIcon>={building:Building2,toilet:Toilet,elevator:ArrowUpDown,water:Droplets,rest:Armchair,ramp:ArrowUpRight,landmark:MapPin,field:Camera}
-const quickCategories:CatalogCategory[]=['field','building','toilet','ramp','elevator','water','rest','landmark']
+const facilityCategories:CatalogCategory[]=['field','ramp','toilet','water','elevator','rest','building','landmark']
 export function PlaceIcon({category,size=19}:{category:CatalogCategory;size?:number}){const Icon=categoryIcons[category];return <Icon size={size} aria-hidden="true"/>}
 
 interface SearchProps{
@@ -21,15 +21,24 @@ export function PlaceSearch({places,query,category,selected,recent,onQuery,onCho
   const [open,setOpen]=useState(false)
   const [active,setActive]=useState(-1)
   const root=useRef<HTMLDivElement>(null)
+  const more=useRef<HTMLDetailsElement>(null)
+  const availableCategories=new Set(places.map(place=>place.category))
+  const quickCategories=facilityCategories.filter(value=>(value==='field'||value==='ramp')&&availableCategories.has(value))
+  const extraCategories=facilityCategories.filter(value=>!quickCategories.includes(value))
   const matched=findPlaces(places,query)
   const recentPlaces=recent.flatMap(id=>places.find(p=>p.id===id)??[])
   const options=query.trim()?matched.slice(0,7):[...recentPlaces,...matched.filter(p=>!recent.includes(p.id))].slice(0,6)
   const choose=(place:CatalogPlace)=>{setOpen(false);setActive(-1);onChoose(place)}
   return <div className="discovery-tools">
     <div className="place-search" ref={root} onBlur={event=>{if(!root.current?.contains(event.relatedTarget))setOpen(false)}}>
-      <form className="place-search-field" role="search" onSubmit={event=>{event.preventDefault();if(options[active>=0?active:0])choose(options[active>=0?active:0]);else{setOpen(false);onBrowse()}}}>
+      <form className="place-search-field" role="search" onSubmit={event=>{
+        event.preventDefault()
+        const option=active>=0?options[active]:query.trim()?options[0]:undefined
+        if(option)choose(option)
+        else{setOpen(false);onBrowse()}
+      }}>
         <Search size={21} aria-hidden="true"/>
-        <input id="place-search-input" aria-label="搜尋校園地點" role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls="place-suggestions" aria-activedescendant={open&&active>=0&&options[active]?`place-suggestion-${active}`:undefined} placeholder="搜尋校園地點與設施" autoComplete="off" value={query} onFocus={()=>{setOpen(true);setActive(-1)}} onChange={event=>{onQuery(event.target.value);setOpen(true);setActive(-1)}} onKeyDown={event=>{
+        <input id="place-search-input" aria-label="搜尋校園地點" role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={open?'place-suggestions':undefined} aria-activedescendant={open&&active>=0&&options[active]?`place-suggestion-${active}`:undefined} placeholder="搜尋地點與設施" autoComplete="off" value={query} onFocus={()=>{if(more.current)more.current.open=false;setOpen(true);setActive(-1)}} onChange={event=>{onQuery(event.target.value);setOpen(true);setActive(-1)}} onKeyDown={event=>{
           if(event.key==='Escape'){event.preventDefault();setOpen(false);setActive(-1)}
           if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();setOpen(true);setActive(index=>options.length?event.key==='ArrowDown'?Math.min(index+1,options.length-1):index<0?options.length-1:Math.max(0,index-1):-1)}
         }}/>
@@ -43,25 +52,35 @@ export function PlaceSearch({places,query,category,selected,recent,onQuery,onCho
         <p className="suggestions-scope">搜尋總圖與博雅周邊的設施和實勘點</p>
       </div>}
     </div>
-    <div className="place-category-strip" role="group" aria-label="附近設施分類">{quickCategories.map(value=><button key={value} className={category===value?'selected':''} aria-pressed={category===value} onClick={()=>{setOpen(false);onCategory(value)}}><PlaceIcon category={value} size={17}/><span>{categoryLabels[value]}</span></button>)}</div>
+    <div className="place-category-strip" role="group" aria-label="附近設施分類">
+      {quickCategories.map(value=><button key={value} className={category===value?'selected':''} aria-pressed={category===value} onClick={()=>{setOpen(false);if(more.current)more.current.open=false;onCategory(value)}}><PlaceIcon category={value} size={17}/><span>{categoryLabels[value]}</span></button>)}
+      <details className="facility-more" ref={more} onToggle={event=>{if(event.currentTarget.open)setOpen(false)}} onKeyDown={event=>{
+        if(event.key==='Escape'&&more.current?.open){event.preventDefault();event.stopPropagation();more.current.open=false;more.current.querySelector('summary')?.focus()}
+      }}>
+        <summary className={category&&extraCategories.includes(category)?'selected':undefined}>更多設施<ChevronDown size={16} aria-hidden="true"/></summary>
+        <div className="facility-options" role="group" aria-label="更多設施分類">
+          {extraCategories.map(value=><button key={value} className={category===value?'selected':''} aria-pressed={category===value} onClick={()=>{if(more.current)more.current.open=false;onCategory(value)}}>
+            <PlaceIcon category={value} size={17}/><span>{categoryLabels[value]}{!availableCategories.has(value)&&<small>資料暫缺</small>}</span>
+          </button>)}
+        </div>
+      </details>
+    </div>
   </div>
 }
 
 export function CatalogStatus({loading,error,onRetry}:{loading:boolean;error:boolean;onRetry:()=>void}){
-  return loading?<p className="catalog-status" role="status">正在補齊周邊地點，基本圖資仍可使用。</p>:error?<div className="catalog-status warning" role="status"><p>周邊地點快照暫時無法載入，先顯示可讀取的資料。路線規劃仍可使用。</p><button onClick={onRetry}>重試地點資料</button></div>:null
+  return loading?<p className="catalog-status" role="status">載入地點中</p>:error?<div className="catalog-status warning" role="status"><p>部分地點暫時無法載入。</p><button onClick={onRetry}>重新載入地點</button></div>:null
 }
-export function PlaceList({catalog,results,title,onChoose,onBack,loading,error,onRetry,fieldList,showAllFieldPoints,backLabel='返回路線規劃'}:{
-  catalog:PlaceCatalog;results:CatalogPlace[];title:string;onChoose:(p:CatalogPlace)=>void;onBack:()=>void
+export function PlaceList({catalog,results,category,title,onChoose,onBack,loading,error,onRetry,fieldList,showAllFieldPoints,backLabel='返回路線'}:{
+  catalog:PlaceCatalog;results:CatalogPlace[];category?:CatalogCategory;title:string;onChoose:(p:CatalogPlace)=>void;onBack:()=>void
   loading:boolean;error:boolean;onRetry:()=>void;fieldList?:boolean;showAllFieldPoints?:()=>void;backLabel?:string
 }){
   const [limit,setLimit]=useState(45)
   const reference=catalog.places.find(p=>p.id==='library')
   return <section className="place-results">
     <button className="back-link" onClick={onBack}><ArrowLeft size={17}/>{backLabel}</button>
-    <div className="place-list-title"><h1 id="place-heading" tabIndex={-1}>{title}</h1><span>{results.length} {fieldList?'個實勘點':'個地點'}</span></div>
-    <p className="place-list-intro">{fieldList?'選擇點位，查看現場照片及量測紀錄。':'選擇地點，查看公開圖資與設施資訊。'}</p>
+    <div className="place-list-title"><h1 id="place-heading" tabIndex={-1}>{title}</h1>{results.length>0&&<span>{results.length} {fieldList?'個實勘點':'個地點'}</span>}</div>
     <CatalogStatus loading={loading} error={error} onRetry={onRetry}/>
-    {catalog.amenitiesStatus==='unavailable'&&!results.length&&<p className="catalog-status warning">廁所、電梯、飲水與休息設施的公開資料暫時未取得。建物、地標與坡道仍可查看。</p>}
     {results.length ? <>
       <ul className="place-result-list">{results.slice(0,limit).map(place=>{
         const field=fieldObservation(place.id)
@@ -77,14 +96,9 @@ export function PlaceList({catalog,results,title,onChoose,onBack,loading,error,o
         </button></li>
       })}</ul>
       {results.length>limit&&<button className="button secondary wide" onClick={()=>setLimit(n=>n+45)}>顯示更多地點</button>}
-    </> : <div className="place-empty"><Search size={30}/><h2>這個範圍尚無符合的點位</h2><p>公開圖資可能尚未收錄。可換個關鍵字或其他類別，空白結果不代表現場沒有設施。</p><button className="button secondary wide" onClick={onBack}>{backLabel}</button></div>}
+    </> : !loading && <div className="place-empty"><Search size={30} aria-hidden="true"/><p>{category?`目前沒有${categoryLabels[category]}點位資料。`:'找不到符合的地點。可試試其他關鍵字。'}</p></div>}
     {showAllFieldPoints&&<button className="button secondary wide field-show-all" onClick={showAllFieldPoints}>查看全部實勘點</button>}
-    {fieldList&&!showAllFieldPoints&&<details className="place-field-trip">
-      <summary>查看實際試走經過</summary>
-      <p><strong>去程</strong>　從總圖前廣場朝衛生保健中心走，經小椰林道接椰林大道旁的通道，走過土木系館前，再從愷元單車店與全家一帶右轉，經小福廣場到博雅教學館，穿過館內到西側。</p>
-      <p><strong>回程</strong>　從博雅西側出來，走到普通教學館北側，經蒲葵道接水杉道，再朝第一學生活動中心方向走，回到總圖前。</p>
-    </details>}
-    {!fieldList&&<p className="place-data-note">距離採直線計算，實際可通行路線需另行確認。</p>}
+    {!fieldList&&results.length>0&&<p className="place-data-note">清單顯示直線距離。</p>}
   </section>
 }
 
@@ -127,14 +141,30 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
     <div className="place-card-top"><button className="back-link" onClick={onClose}><ArrowLeft size={17}/>{backLabel}</button><button className="icon-button" onClick={onClose} aria-label="關閉地點卡片"><X size={20}/></button></div>
     <div className={`place-card-symbol ${place.category}`}><PlaceIcon category={place.category} size={30}/><span>{categoryLabels[place.category]}</span></div>
     <h1 id="place-heading" ref={heading} tabIndex={-1}>{place.name}</h1>
-    <p className="place-card-subtitle">{categoryLabels[place.category]}<span>公開圖資</span></p>
-    <div className="place-card-actions"><button className="button primary" disabled={!place.routePlaceId} onClick={()=>onEndpoint('to')}><ArrowRight size={17}/>前往這裡</button><button className="button secondary" disabled={!place.routePlaceId} onClick={()=>onEndpoint('from')}><MapPin size={17}/>從這裡出發</button><button className="place-share" onClick={share}><Copy size={17}/>分享</button></div>
+    <p className="place-card-subtitle">{categoryLabels[place.category]}</p>
+    <div className={`place-card-actions ${place.routePlaceId?'':'share-only'}`}>
+      {place.routePlaceId&&<><button className="button primary" onClick={()=>onEndpoint('to')}><ArrowRight size={17} aria-hidden="true"/>前往這裡</button>
+        <button className="button secondary" onClick={()=>onEndpoint('from')}><MapPin size={17} aria-hidden="true"/>從這裡出發</button></>}
+      <button className="place-share" onClick={share}><Copy size={17} aria-hidden="true"/>分享</button>
+    </div>
     {shareStatus}
-    <p className={`place-route-scope ${place.routePlaceId?'connected':''}`}>{place.routePlaceId?'可規劃總圖與博雅之間的路線。建物中心與路線起終點分開標示。':'目前路線涵蓋總圖與博雅，這裡可查看地點資訊。'}</p>
-    <dl className="place-facts"><div><dt>位置說明</dt><dd>{place.note}</dd></div><div><dt>地址</dt><dd>{place.address??'來源尚未提供'}</dd></div><div><dt>開放時間</dt><dd>{place.openingHours??'來源尚未提供'}{place.openingHours&&<small>公開圖資上的開放時間</small>}</dd></div><div><dt>輪椅資訊</dt><dd>{wheelchair}</dd></div>{place.level&&<div><dt>樓層標記</dt><dd>{place.level}</dd></div>}{place.widthM!==null&&<div><dt>來源路寬</dt><dd>{place.widthM} m</dd></div>}{place.slopePercent!==null&&<div><dt>來源坡度</dt><dd>{place.slopePercent}%</dd></div>}</dl>
+    {place.routePlaceId&&<p className="place-route-scope connected">地圖上的館名標示建物中心，路線起終點另有標記。</p>}
+    <dl className="place-facts">
+      {place.note&&!place.routePlaceId&&<div><dt>位置</dt><dd>{place.note}</dd></div>}
+      {place.address&&<div><dt>地址</dt><dd>{place.address}</dd></div>}
+      <div><dt>開放時間</dt><dd>{place.openingHours??'暫無資料'}</dd></div>
+      <div><dt>輪椅資訊</dt><dd>{wheelchair}</dd></div>
+      {place.level&&<div><dt>樓層</dt><dd>{place.level}</dd></div>}
+      {place.widthM!==null&&<div><dt>圖資路寬</dt><dd>{place.widthM} 公尺</dd></div>}
+      {place.slopePercent!==null&&<div><dt>圖資坡度</dt><dd>{place.slopePercent}%</dd></div>}
+    </dl>
     {place.routePlaceId&&<section className="place-entrances"><h2>{mode==='demo'?'試走起終點':'路線入口'}</h2>{entrances.length?<ul>{entrances.map(entrance=><li key={entrance.id}><MapPin size={17}/><div><strong>{entrance.name}</strong><p>{entrance.source}</p>{entrance.verifiedAt&&<small>查核日期 {formatDate(entrance.verifiedAt)}</small>}</div></li>)}</ul>:<p>目前沒有符合條件的路線位置。</p>}</section>}
     <section className="place-photo-section"><h2>地點照片</h2><PhotoGallery photos={place.photos}/></section>
     {nearby.length>0&&<section className="place-nearby"><h2>附近設施<span>直線 250 m 內</span></h2>{nearby.map(p=><button key={p.id} onClick={()=>onChoose(p)}><PlaceIcon category={p.category} size={18}/><span>{p.name}<small>直線 {formatDistance(distance(p.coordinate,place.coordinate))}</small></span><ChevronRight size={16}/></button>)}</section>}
-    <div className="place-source"><ShieldQuestion size={18}/><div><strong>圖資來源</strong><p>{source?.label??'公開圖資'} · 取得 {formatDate(place.retrievedAt)}</p>{source?.status==='cached'&&<p>更新暫時失敗，保留上一版快照。</p>}<a href={place.sourceUrl} target="_blank" rel="noreferrer">查看原始來源<ArrowUpRight size={14}/></a></div></div>
+    <details className="field-source">
+      <summary>資料說明</summary>
+      <p>{source?.label??'地點圖資'} · 取得於 {formatDate(place.retrievedAt)}</p>
+      <a href={place.sourceUrl} target="_blank" rel="noreferrer">查看原始來源<ArrowUpRight size={14} aria-hidden="true"/></a>
+    </details>
   </article>
 }

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "team": "vite --mode team --host 127.0.0.1 --strictPort",
     "build": "tsc -b && node scripts/clean-build.mjs && vite build && node scripts/build-community.mjs",
     "typecheck": "tsc --noEmit && tsc --project tsconfig.tools.json && tsc --project tsconfig.server.json",
     "preview": "node scripts/dev-community.mjs",

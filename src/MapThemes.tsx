@@ -2,14 +2,14 @@ import { MapPin, MessageSquare, Mountain, Route } from 'lucide-react'
 import type { MapTheme } from './types'
 
 export const mapThemes = [
-  { id: 'routes' as const, label: '路線', Icon: Route, description: '比較兩條動線' },
+  { id: 'routes' as const, label: '路線', Icon: Route, description: '查看去程與回程' },
   { id: 'conditions' as const, label: '路況', Icon: MessageSquare, description: '近期回報與障礙位置' },
   { id: 'slope' as const, label: '坡度', Icon: Mountain, description: '依各段最大坡度呈現' },
   { id: 'facilities' as const, label: '設施', Icon: MapPin, description: '周邊公開設施點位' },
 ]
 
-export function ThemeChooser({ theme, onChange }: { theme: MapTheme; onChange: (theme: MapTheme) => void }) {
-  return <div className="map-theme-options" role="group" aria-label="地圖主題">{mapThemes.map(({ id, label, Icon, description }) => <button key={id} type="button" aria-pressed={theme === id} onClick={() => onChange(id)}><Icon size={19} aria-hidden="true" /><strong>{label}</strong><small>{description}</small></button>)}</div>
+export function ThemeChooser({ theme, onChange, showSlope = true }: { theme: MapTheme; onChange: (theme: MapTheme) => void; showSlope?: boolean }) {
+  return <div className="map-theme-options" role="group" aria-label="地圖主題">{mapThemes.filter(item => showSlope || item.id !== 'slope').map(({ id, label, Icon, description }) => <button key={id} type="button" aria-pressed={theme === id} onClick={() => onChange(id)}><Icon size={19} aria-hidden="true" /><strong>{label}</strong><small>{description}</small></button>)}</div>
 }
 
 export function ThemeLegend({ theme, simulatedSlopes }: { theme: MapTheme; simulatedSlopes: boolean }) {

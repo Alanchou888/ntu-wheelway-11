@@ -66,14 +66,14 @@ describe('campus place search and endpoints',()=>{
 describe('place information disclosure',()=>{
   it('shows unknown hours, separate route endpoints and public sources',()=>{
     const html=renderToStaticMarkup(<PlaceCard place={library} catalog={catalog} entrances={[]} mode="demo" onClose={()=>{}} onEndpoint={()=>{}} onChoose={()=>{}} shareUrl="https://example.test/#place=library"/>)
-    expect(html).toContain('來源尚未提供');expect(html).toContain('建物中心與路線起終點分開標示');expect(html).toContain('圖資來源');expect(html).toContain('尚無現場照片')
+    expect(html).toContain('暫無資料');expect(html).toContain('路線起終點另有標記');expect(html).toContain('資料說明');expect(html).toContain('尚無現場照片')
   })
-  it('disables route actions on unconnected points',()=>{
+  it('omits route actions on unconnected points',()=>{
     const html=renderToStaticMarkup(<PlaceCard place={catalog.places.find(p=>!p.routePlaceId)!} catalog={catalog} entrances={[]} mode="demo" onClose={()=>{}} onEndpoint={()=>{}} onChoose={()=>{}} shareUrl="https://example.test/"/>)
-    expect(html.match(/disabled=""/g)).toHaveLength(2);expect(html).toContain('目前路線涵蓋總圖與博雅')
+    expect(html).not.toContain('前往這裡');expect(html).not.toContain('從這裡出發');expect(html).toContain('分享')
   })
   it('explains empty public records and provides a usable return action',()=>{
-    const html=renderToStaticMarkup(<PlaceList catalog={catalog as PlaceCatalog} results={[]} title="附近廁所" onChoose={()=>{}} onBack={()=>{}} loading={false} error={false} onRetry={()=>{}}/>)
-    expect(html).toContain('空白結果不代表現場沒有設施');expect(html).toContain('返回路線規劃');expect(html).toContain('暫時未取得')
+    const html=renderToStaticMarkup(<PlaceList catalog={catalog as PlaceCatalog} results={[]} category="water" title="飲水" onChoose={()=>{}} onBack={()=>{}} loading={false} error={false} onRetry={()=>{}}/>)
+    expect(html).toContain('目前沒有飲水點位資料');expect(html).toContain('返回路線')
   })
 })

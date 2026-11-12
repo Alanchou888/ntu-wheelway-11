@@ -475,7 +475,7 @@ export default function CampusMap(props: Props) {
     </div>
     {layersOpen && createPortal(<div className="layer-popover">
       <div className="layer-title">地圖圖層<button className="icon-button" onClick={() => setLayersOpen(false)} aria-label="關閉圖層選單"><X size={17} /></button></div>
-      {props.onThemeChange&&<><ThemeChooser theme={theme} onChange={next=>{props.onThemeChange?.(next);setLayersOpen(false);layerButton.current?.focus()}} /><ThemeLegend theme={theme} simulatedSlopes={simulatedSlopes}/></>}
+      {props.onThemeChange&&<><ThemeChooser theme={theme} showSlope={props.routes.some(route => route.segments.some(segment => segment.maxSlopePercent !== null))} onChange={next=>{props.onThemeChange?.(next);setLayersOpen(false);layerButton.current?.focus()}} /><ThemeLegend theme={theme} simulatedSlopes={simulatedSlopes}/></>}
       <label><input type="checkbox" checked={showCampus} onChange={e => setShowCampus(e.target.checked)} /><span>臺大校園建物與道路</span></label>
       <label><input type="checkbox" checked={showFacilities} disabled={theme!=='routes'} onChange={e => setShowRamps(e.target.checked)} /><span>公開斜坡道 <small>{props.campus.facilities.length} 個</small></span></label>
       <label><input type="checkbox" checked={theme==='conditions'||theme==='routes'&&showCommunity} disabled={theme!=='routes'} onChange={e=>setShowCommunity(e.target.checked)}/><span>社群路況 <small>{props.communityReports?.length??0} 則</small></span></label>

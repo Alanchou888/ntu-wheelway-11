@@ -1,0 +1,75 @@
+.mvp .topbar { grid-template-columns: auto minmax(0, 1fr); }
+.mvp .product-nav { justify-content: end; }
+.mvp .route-scope-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 38px;
+  margin: 0;
+  padding: 8px 28px;
+  border-bottom: 1px solid #ede0c5;
+  background: #fff7e7;
+  color: #714b24;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.route-scope-note svg { flex-shrink: 0; }
+.mvp .map-sheet .direction-picker h1 { margin: 0 0 8px; font-size: 15px; }
+.mvp .direction-cards { margin-top: 18px; }
+.mvp .route-heading .back-link { margin: 0 0 5px; }
+.mvp .route-heading h1 { line-height: 1.35; }
+.mvp .route-heading > p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.mvp .route-heading .route-distance { color: var(--ink); font-weight: 600; }
+.mvp .route-primary-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.mvp .route-primary-actions .button { flex: 1 1 auto; min-height: 44px; padding: 8px 10px; font-size: 13px; }
+.mvp .route-panel-content { padding-bottom: 18px; }
+.mvp .route-share-actions { margin: 16px 0 18px; }
+.mvp .field-segment-name { margin: 8px 0; color: var(--ink); font-size: 14px; }
+.mvp .segment-info .section-heading h2 { font-size: 16px; }
+.mvp .segment-info .section-heading > span { font-size: 11px; text-align: end; }
+.mvp .place-list-title { margin-bottom: 12px; }
+.mvp .place-card-actions.share-only { display: flex; }
+.mvp .share-only .place-share { flex-direction: row; padding: 0 12px; font-size: 13px; }
+.mvp .place-category-strip { position: relative; overflow: visible; mask-image: none; }
+.mvp .facility-more summary {
+  display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 0 12px;
+  border: 1px solid #b6c4cf; border-radius: 22px; background: #fff; color: #334c60;
+  box-shadow: 0 2px 7px #173e5b10; font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+.facility-more summary::-webkit-details-marker { display: none; }
+.mvp .facility-more[open] summary, .mvp .facility-more summary.selected { border-color: #205db6; background: #e6effd; color: #17488e; }
+.mvp .facility-options {
+  position: absolute; z-index: 3; top: 100%; left: 4px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  width: min(286px, calc(100vw - 34px)); padding: 8px;
+  border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: 0 4px 16px #173e5b26;
+}
+.mvp .facility-options button { height: auto; min-height: 46px; border-radius: 6px; text-align: left; box-shadow: none; }
+.mvp .facility-options small { display: block; color: var(--muted); font-size: 11px; }
+.mvp .mvp-help-steps { margin: 18px 0; }
+.mvp .mvp-help-details { margin-top: 18px; padding: 0 14px 8px; border: 1px solid var(--border); border-radius: 8px; }
+.mvp .mvp-help-details summary { min-height: 44px; padding: 12px 0; color: var(--ink); font-weight: 600; cursor: pointer; }
+.mvp .mvp-help-details p { margin: 0 0 12px; color: var(--muted); line-height: 1.65; }
+.mvp .offline-status { gap: 8px 16px; }
+
+@media (max-width: 760px), (max-height: 540px) and (max-width: 1000px) {
+  .app.mvp.map-experience { min-height: 530px; }
+  .app.mvp.map-experience:has(.route-workspace[data-screen='compare'][data-sheet='map']) { min-height: 530px; }
+  .app.mvp .topbar { min-height: 96px; padding-inline: 12px; gap: 0; }
+  .app.mvp .topbar .brand { min-height: 48px; }
+  .app.mvp .product-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .app.mvp .product-nav button { min-height: 44px; }
+  .mvp .route-scope-note { padding: 7px 12px; font-size: 12px; }
+  .mvp.map-experience .map-sheet .panel-main { padding: 12px 15px 0; }
+  .mvp .map-sheet .route-heading h1 { font-size: 20px; }
+  .mvp .route-heading .back-link { margin-bottom: 1px; }
+  .mvp .route-primary-actions { margin: 10px 0; }
+  .mvp .sheet-collapsed { padding: 9px 12px 11px; }
+  .mvp .facility-options { left: 0; }
+}
+
+@media (max-width: 350px) {
+  .mvp .walked-route-picker button { gap: 5px; padding-inline: 7px; }
+  .mvp .walked-route-picker button strong { gap: 4px; }
+}

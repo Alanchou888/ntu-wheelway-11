@@ -10,12 +10,13 @@ interface Props {
   size: SheetSize; onSize: (size: SheetSize) => void; mobile: boolean
   panelRef: Ref<HTMLElement>; children: ReactNode; collapsed: ReactNode
   label?: string
+  showControls?: boolean
 }
-export default function MapSheet({ size, onSize, mobile, panelRef, children, collapsed, label='路線資訊' }: Props) {
+export default function MapSheet({ size, onSize, mobile, panelRef, children, collapsed, label='路線資訊', showControls = true }: Props) {
   const gesture = useRef<{ y: number; pointer: number; dragged: boolean } | null>(null)
   const shift = (direction: number) => onSize(sizes[Math.max(0, Math.min(2, sizes.indexOf(size) + direction))])
-  return <aside className="content-panel map-sheet" data-size={size} id="content-panel" tabIndex={-1} ref={panelRef} aria-label={label==='路線資訊'?'路線設定與資訊':label}>
-    <div className="sheet-controls">
+  return <aside className="content-panel map-sheet" data-size={size} id="content-panel" tabIndex={-1} ref={panelRef} aria-label={label}>
+    {showControls && <div className="sheet-controls">
       <button className="sheet-grip" aria-label={`調整面板高度，目前${labels[size]}，可使用上下方向鍵`} onPointerDown={event => {
         gesture.current = { y: event.clientY, pointer: event.pointerId, dragged: false }
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -35,7 +36,7 @@ export default function MapSheet({ size, onSize, mobile, panelRef, children, col
       <div className="sheet-size-buttons" role="group" aria-label="面板高度">{[
         { size: 'map' as const, icon: Map }, { size: 'half' as const, icon: AlignLeft }, { size: 'full' as const, icon: Maximize2 },
       ].map(item => <button key={item.size} onClick={() => onSize(item.size)} aria-pressed={size === item.size} aria-label={`${labels[item.size]}面板`}><item.icon size={16} aria-hidden="true" /><span>{labels[item.size]}</span></button>)}</div>
-    </div>
+    </div>}
     {mobile && size === 'map' && <div className="sheet-collapsed">{collapsed}</div>}
     <div className="sheet-body" hidden={mobile && size === 'map'}>{children}</div>
   </aside>
