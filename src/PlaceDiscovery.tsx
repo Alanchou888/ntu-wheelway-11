@@ -148,10 +148,11 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
     <p className="field-observation-note">{place.note}</p>
     {field.width && <dl className="field-readings"><div>
       <dt>{field.width.label}</dt><dd><strong>約 {field.width.cm} 公分</strong><span>{field.width.context}</span></dd>
+      <dd>依組員觀察，手動輪椅可以過，但電動輪椅會太窄。</dd>
     </div></dl>}
     {angleDisplay && <dl className="field-readings"><div>
-      <dt>{hasAngleRange ? '手機單點傾角讀值範圍' : '手機單點傾角'}</dt>
-      <dd><strong>{angleDisplay}</strong><span>行進方向的坡度尚未確認。</span></dd>
+      <dt>{hasAngleRange ? '手機單點傾角讀值範圍' : '單點傾角'}</dt>
+      <dd><strong>{angleDisplay}</strong></dd>
     </div></dl>}
     {!angleDisplay && (field.angles || field.facilityCategory === 'ramp') && <p className="field-grade">
       {field.angles ? '手機傾角尚無可確認的讀值。' : '尚無行進方向的坡度資料。'}
@@ -167,9 +168,8 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
     <details className="field-source">
       <summary>量測、位置與來源</summary>
       {field.angles && <>
-        <p>以下是手機畫面的單點傾角。手機是否沿輪椅行進方向放置，尚未確認。</p>
         <dl className="field-angles">{field.angles.map(({instrument,degrees,source})=><div key={source}>
-          <dt>{instrument} <strong>{formatFieldAngle(degrees)}</strong></dt><dd>{source}</dd>
+          <dt>{instrument ?? '單點傾角'} <strong>{formatFieldAngle(degrees)}</strong></dt><dd>{source}</dd>
         </div>)}</dl>
       </>}
       <p>{field.location}</p>

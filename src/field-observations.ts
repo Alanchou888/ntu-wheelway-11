@@ -18,7 +18,7 @@ export const fieldKinds = {
 } as const
 
 interface AngleReading {
-  instrument: 'GeoClino' | '手機水平儀'
+  instrument?: 'GeoClino' | '手機水平儀'
   degrees: number | null
   source: string
 }
@@ -113,7 +113,7 @@ const observations: FieldObservation[] = [
     level: '一樓',
     location: '一樓位置圖依 IMG_5066 約 00:11 的 103 教室門牌標示。校園地圖的圖釘依 IMG_9238 中量測手機的座標估位。',
     files: 'IMG_5065、IMG_5066（館內影片），IMG_3123（寬度照片），IMG_9238 約 00:00.9（量測畫面）',
-    note: '坡道在 103 教室旁。試走時用的手動輪椅勉強通過，較寬的輪椅可能受扶手間距限制。',
+    note: '坡道在 103 教室旁。試走時用的手動輪椅勉強通過。',
     width: { label: '扶手間寬度', cm: 89, context: '以 iPad 在兩側扶手之間橫向估測。' },
     angles: [{ instrument: 'GeoClino', degrees: -4, source: 'IMG_9238 約 00:00.87，左側垂直刻度' }],
     photos: [photo('boya-indoor-width', '博雅館內坡道的扶手間標示 89 公分', '一樓坡道的兩側扶手間約 89 公分。'),
@@ -129,7 +129,7 @@ const observations: FieldObservation[] = [
     level: '一樓',
     location: '校方一樓平面圖標示廁所位於西側電梯旁。校園地圖的圖釘標在建物中心。',
     files: 'IMG_3126（門口寬度照片），IMG_5067 約 00:22 至 00:33（館內試走影片）',
-    note: '影片中，手動輪椅進到廁所，門邊有組員。較寬的電動輪椅可能受門口寬度限制。',
+    note: '影片中，手動輪椅進到廁所，門邊有組員。',
     width: { label: '門口寬度', cm: 78, context: 'iPad 單點估測。開門角度與轉向空間也會影響進出。' },
     photos: [photo('boya-restroom-width', '博雅館內廁所門口的量測線標示 78 公分', '一樓廁所門口約 78 公分。')],
   },
@@ -141,6 +141,7 @@ const observations: FieldObservation[] = [
     coordinate: [121.5362, 25.0188],
     location: '圖釘依 IMG_5069 影片 GPS 估位。',
     files: 'IMG_5068（照片）、IMG_5069（試走影片）',
+    angles: [{ degrees: -4, source: '第 11 組補充的現場讀值' }],
     note: '西側正門朝向運動場，門外有戶外坡道。試走時輪椅經過這段坡道，兩側有扶手。',
     photos: [photo('boya-west-ramp', '輪椅經過博雅西側的扶手坡道', '試走時經過西側的戶外坡道。')],
   },
