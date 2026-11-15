@@ -32,6 +32,76 @@
 .mvp .segment-field-links .field-link-text > small { color: var(--muted); }
 .mvp .segment-landmark, .mvp .segment-indoor { font-size: 13px; line-height: 1.6; color: var(--muted); }
 .mvp .segment-indoor { margin: 7px 0 0; }
+.boya-floor-details {
+  margin: 12px 0;
+  padding: 0 12px;
+  border: 1px solid #c5d6de;
+  border-radius: 8px;
+  background: #f6f9fb;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.boya-floor-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.boya-floor-details > summary::-webkit-details-marker { display: none; }
+.boya-floor-details[open] > summary svg { transform: rotate(180deg); }
+.boya-floor-details figure { margin: 6px 0 0; }
+.boya-floor-details figcaption { margin: 6px 0 10px; color: var(--muted); font-size: 12px; }
+.boya-floor-orientation { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; color: #3a5662; font-size: 12px; }
+.boya-floor-layout {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-areas:
+    '. classroom101 classroom101 classroom102 classroom102 classroom103 classroom103'
+    'exit hall hall hall hall hall ramp'
+    '. lift restroom . . . .';
+  grid-auto-rows: minmax(33px, auto);
+  align-items: stretch;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #aabfc9;
+  border-radius: 6px;
+  background: #e5edf1;
+  color: #354e5a;
+  font-size: 12px;
+}
+.boya-floor-room, .boya-floor-lift, .boya-floor-hall { display: grid; place-items: center; text-align: center; }
+.boya-floor-room, .boya-floor-lift { border: 1px solid #bacbd4; border-radius: 3px; background: #fff; }
+.boya-floor-room.room-101 { grid-area: classroom101; }
+.boya-floor-room.room-102 { grid-area: classroom102; }
+.boya-floor-room.room-103 { grid-area: classroom103; }
+.boya-floor-hall { grid-area: hall; }
+.boya-floor-lift { grid-area: lift; }
+.boya-floor-pin {
+  display: inline-grid;
+  place-items: center;
+  justify-self: center;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: #205164;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.boya-floor-pin.floor-exit { grid-area: exit; }
+.boya-floor-pin.floor-ramp { grid-area: ramp; }
+.boya-floor-pin.floor-restroom { grid-area: restroom; }
+.boya-floor-legend { display: grid; gap: 8px; margin: 0 0 10px; }
+.boya-floor-legend dt { display: flex; align-items: center; gap: 7px; color: var(--ink); font-weight: 600; }
+.boya-floor-legend dd { margin: 2px 0 0 31px; color: var(--muted); }
+.boya-floor-sources { display: grid; margin: 0 0 4px; border-top: 1px solid #c5d6de; }
+.boya-floor-sources a { display: flex; align-items: center; min-height: 44px; color: #205164; text-underline-offset: 3px; }
 .mvp .walked-limits { margin: 14px 0 0; color: #684c27; font-size: 13px; line-height: 1.6; }
 .mvp .route-secondary-actions { display: flex; margin-top: 8px; }
 .mvp .mvp-route-reports summary { display: flex; align-items: center; min-height: 44px; color: var(--green); cursor: pointer; }

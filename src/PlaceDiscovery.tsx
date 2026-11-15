@@ -6,6 +6,7 @@ import {categoryLabels,findPlaces,placeCategories} from './places'
 import {distance,formatDate,formatDistance} from './routes'
 import {fieldKinds,fieldObservation,formatFieldAngle} from './field-observations'
 import type {FieldObservation} from './field-observations'
+import {BoyaFloorPlan,boyaFloorPointIds} from './BoyaFloorPlan'
 import PhotoGallery from './PhotoGallery'
 import './place-discovery.css'
 
@@ -124,6 +125,10 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
   const heading=useRef<HTMLHeadingElement>(null)
   useEffect(()=>{heading.current?.focus({preventScroll:true})},[])
   const field=fieldObservation(place.id)
+  const angleSamples = field?.angles?.flatMap(reading => reading.degrees ?? []) ?? []
+  const minAngle = Math.min(...angleSamples)
+  const maxAngle = Math.max(...angleSamples)
+  const angleRange = minAngle < maxAngle ? `${formatFieldAngle(minAngle)} 至 ${formatFieldAngle(maxAngle)}` : null
   const source=catalog.sources.find(s=>s.id===place.sourceId)
   const nearby=catalog.places.filter(p=>p.id!==place.id&&!['building','landmark'].includes(p.category)&&distance(p.coordinate,place.coordinate)<=250).sort((a,b)=>distance(a.coordinate,place.coordinate)-distance(b.coordinate,place.coordinate)).slice(0,3)
   const wheelchair=place.wheelchair?({yes:'來源標記為可使用',no:'來源標記為無法使用',limited:'來源標記為部分可使用',designated:'來源標記為輪椅專用'}[place.wheelchair]??place.wheelchair):'來源尚未提供'
@@ -141,7 +146,11 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
     {field.width && <dl className="field-readings"><div>
       <dt>{field.width.label}</dt><dd><strong>約 {field.width.cm} 公分</strong><span>{field.width.context}</span></dd>
     </div></dl>}
-    {(field.angles || field.facilityCategory === 'ramp') && <p className="field-grade">
+    {angleRange && <dl className="field-readings"><div>
+      <dt>手機單點傾角讀值範圍</dt>
+      <dd><strong>{angleRange}</strong><span>裝置與擺放方式可能影響讀值。行進方向的坡度尚未確認。</span></dd>
+    </div></dl>}
+    {!angleRange && (field.angles || field.facilityCategory === 'ramp') && <p className="field-grade">
       {field.angles ? '行進方向坡度尚未確認，手機單點讀值見下方資料說明。' : '尚無行進方向的坡度資料。'}
     </p>}
     <section className="place-photo-section"><h2>現場照片</h2><PhotoGallery photos={place.photos}/></section>
@@ -151,6 +160,7 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
       <p>{field.video.caption}</p>
     </section>}
     <p className="field-card-date">實勘日期 {formatDate(place.retrievedAt)}</p>
+    {boyaFloorPointIds.has(field.id) && <BoyaFloorPlan />}
     <details className="field-source">
       <summary>量測、位置與來源</summary>
       {field.angles && <>

@@ -21,6 +21,7 @@ import { useCommunity } from './useCommunity'
 import { usePlaceCatalog } from './usePlaceCatalog'
 import { categoryLabels, clearRecentPlaces, findPlaces, placeEndpointPatch, readRecentPlaces, rememberPlace } from './places'
 import { CatalogStatus, FieldSummary, FieldSymbol, PlaceCard, PlaceList, PlaceSearch } from './PlaceDiscovery'
+import { BoyaFloorPlan, boyaFloorPointIds } from './BoyaFloorPlan'
 import { fieldObservation } from './field-observations'
 import type { FieldObservation } from './field-observations'
 import './product.css'
@@ -105,6 +106,7 @@ function SegmentInfo({ segment, onSelectField }: { segment: Segment; onSelectFie
     <h3 className="field-segment-name">{segment.name}</h3>
     {segment.nextLandmark && <p className="segment-landmark">下一個地標 <strong>{segment.nextLandmark}</strong></p>}
     {segment.approximate && <p className="segment-indoor">組員由東側進入博雅一樓，再從西側出來。館內轉折尚未測繪。</p>}
+    {fields.some(point => boyaFloorPointIds.has(point.id)) && <BoyaFloorPlan key={segment.id} />}
     {fields.length ? <FieldLinks points={fields} prefix="segment" onSelect={onSelectField} />
       : <p className="segment-no-points">這一段尚無實勘點。</p>}
     <details className="evidence-details segment-measurements">
