@@ -28,6 +28,7 @@ describe('campus place search and endpoints',()=>{
       expect.arrayContaining(['field-library-ramp', 'field-boya-ramp', 'field-boya-indoor-ramp']),
     )
     expect(findPlaces(places, '', 'field').some(place => place.id === 'field-boya-restroom')).toBe(true)
+    expect(findPlaces(places, '', 'ramp').some(place => place.id === 'field-boya-west-ramp')).toBe(true)
     expect(findPlaces(places, '', 'water')).toEqual([])
   })
   it('keeps the two routable buildings first without inferring other entrances',()=>{
@@ -74,6 +75,16 @@ describe('campus place search and endpoints',()=>{
   })
 })
 describe('place information disclosure',()=>{
+  it('shows spot estimates separately from source angle readings and travel grade', () => {
+    const fieldCatalog = withFieldObservations(catalog)
+    const field = fieldCatalog.places.find(place => place.id === 'field-boya-indoor-ramp')!
+    const html = renderToStaticMarkup(<PlaceCard place={field} catalog={fieldCatalog} entrances={[]} mode="demo" onClose={()=>{}} onEndpoint={()=>{}} onChoose={()=>{}} shareUrl="https://example.test/"/>)
+    expect(html).toContain('約 89 公分')
+    expect(html).toContain('行進方向坡度尚未確認')
+    expect(html).toContain('IMG_9238 約 00:00.87')
+    expect(html).toContain('−4°')
+    expect(html).not.toMatch(/0E|3N|2N|1W|3S|1E/)
+  })
   it('shows unknown hours, separate route endpoints and public sources',()=>{
     const html=renderToStaticMarkup(<PlaceCard place={library} catalog={catalog} entrances={[]} mode="demo" onClose={()=>{}} onEndpoint={()=>{}} onChoose={()=>{}} shareUrl="https://example.test/#place=library"/>)
     expect(html).toContain('暫無資料');expect(html).toContain('路線起終點另有標記');expect(html).toContain('資料說明');expect(html).toContain('尚無現場照片')

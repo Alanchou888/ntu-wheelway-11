@@ -1,6 +1,7 @@
 import type { Entrance, Route, Segment } from './types'
 import { fieldObservation } from './field-observations'
 import { walkedSections } from './walked-geometry'
+import { formatDistance, lineDistance } from './routes'
 
 const fieldIds = {
   out: [
@@ -8,7 +9,7 @@ const fieldIds = {
     ['field-curb-incline', 'field-road-incline'],
     [],
     ['field-boya-ramp'],
-    ['field-boya-indoor-ramp', 'field-boya-restroom'],
+    ['field-boya-indoor-ramp', 'field-boya-restroom', 'field-boya-west-ramp'],
   ],
   back: [
     ['field-boya-west-ramp', 'field-covered-walkway', 'field-tile-incline'],
@@ -30,7 +31,7 @@ export function buildWalkedRoutes(): Route[] {
         photos: fieldPointIds.length ? fieldObservation(fieldPointIds[0])?.photos ?? [] : [],
         obstacles: [], fieldPointIds,
         source: section.approximate
-          ? '博雅館內虛線依第 11 組走法估繪，連接東、西側。館內扶手坡道和廁所在一樓。'
+          ? '第 11 組由博雅東側進入一樓，再從西側出來。館內扶手坡道與廁所在一樓，途中轉折尚未測繪。'
           : '第 11 組 2026/11/10 試走，依口述地標與 OpenStreetMap 步道重繪。',
         sourceUrl: section.approximate ? undefined : 'https://www.openstreetmap.org/copyright',
         retrievedAt: '2026-11-10', verifiedAt: null,
@@ -54,4 +55,9 @@ export function buildWalkedRoutes(): Route[] {
       segments,
     }
   })
+}
+
+export function walkedDistanceLabel(route: Route): string {
+  const distance = route.segments.reduce((sum, segment) => sum + (segment.approximate ? 0 : lineDistance(segment.coordinates)), 0)
+  return `圖上估算約 ${formatDistance(distance)}${route.segments.some(segment => segment.approximate) ? '（室外）' : ''}`
 }

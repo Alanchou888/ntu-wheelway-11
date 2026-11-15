@@ -70,6 +70,7 @@ export function CommunitySection({data,segmentId,onOpen,onOpenPhoto}:{data:Commu
 
 function ReportForm({data,segments,initialSegment,onDone,active}:{data:CommunityData;segments:CommunitySegment[];initialSegment:string;onDone:(segmentId:string)=>void;active:boolean}) {
   const [segmentId,setSegmentId]=useState(initialSegment||segments[0]?.id||'')
+  const segment = segments.find(item => item.id === segmentId)
   const [coordinate,setCoordinate]=useState<Coordinate|null>(null)
   const [category,setCategory]=useState<ReportCategory>('parking')
   const [impact,setImpact]=useState<ReportImpact>('difficult')
@@ -92,7 +93,7 @@ function ReportForm({data,segments,initialSegment,onDone,active}:{data:Community
     setFeedback('');setBusy(true)
     try {
       const input=validateReport({segmentId,category,impact,message,authorName,coordinate,observedAt:new Date(observedAt).toISOString()},new Set(segments.map(s=>s.id)))
-      validateReportPoint(input.coordinate,segments.find(s=>s.id===segmentId)?.coordinates)
+      validateReportPoint(input.coordinate,segment?.coordinates)
       const {id}=await communityRequest('reports',{method:'POST',body:JSON.stringify(input)})
       if(photo){setPendingPhotoId(id);try{await upload(id)}catch(error){setFeedback(`文字已發布，照片上傳結果尚未確認。${messageFor(error)}`);await data.refresh();return}}
       reset();setFeedback('已公開回報，其他使用者可以查看及確認。');await data.refresh()
@@ -102,7 +103,8 @@ function ReportForm({data,segments,initialSegment,onDone,active}:{data:Community
     <h3>回報你看到的路況</h3><p>回報會公開顯示於所選路段，請描述實際看到的情況。</p>
     <fieldset disabled={busy||!!pendingPhotoId}>
       <label><span>路段</span><select required value={segmentId} onChange={e=>{setSegmentId(e.target.value);setCoordinate(null);setFeedback('')}}>{segments.map(s=><option key={s.id} value={s.id}>{s.routeName}：{s.name}</option>)}</select></label>
-      <ReportPointPicker key={segmentId} segment={segments.find(s=>s.id===segmentId)} coordinate={coordinate} onChange={setCoordinate} active={active&&!busy&&!pendingPhotoId} />
+      {segment?.approximate ? <p>館內走向約略，可用整段回報。</p>
+        : <ReportPointPicker key={segmentId} segment={segment} coordinate={coordinate} onChange={setCoordinate} active={active&&!busy&&!pendingPhotoId} />}
       <div className="community-field-pair"><label><span>問題類型</span><select value={category} onChange={e=>setCategory(e.target.value as ReportCategory)}>{Object.entries(categories).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label><span>通行影響</span><select value={impact} onChange={e=>setImpact(e.target.value as ReportImpact)}>{Object.entries(impacts).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></div>
       <label><span>路況說明</span><textarea required minLength={5} maxLength={500} rows={3} value={message} onChange={e=>setMessage(e.target.value)} placeholder="例如：轉角停了多輛腳踏車，推輪椅需要繞到旁邊。"/><small>{message.length} / 500 字</small></label>
       <div className="community-field-pair"><label><span>發現時間</span><input required type="datetime-local" value={observedAt} onChange={e=>setObservedAt(e.target.value)}/></label><label><span>公開暱稱（選填）</span><input maxLength={24} value={authorName} onChange={e=>setAuthorName(e.target.value)} placeholder="校園使用者" autoComplete="nickname"/></label></div>

@@ -1,12 +1,13 @@
 // Outdoor geometry follows the campus OSM snapshot at the survey team’s waypoints.
-// The indoor line only connects the two observed sides of Boya.
+// The indoor endpoints preserve route continuity. The map shows a label for this section.
 import type { Coordinate } from './types'
 
-interface WalkedSection { name: string; coordinates: Coordinate[]; approximate?: boolean }
+interface WalkedSection { name: string; nextLandmark: string; coordinates: Coordinate[]; approximate?: boolean }
 export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
   out: [
     {
       name: "總圖前廣場至保健中心旁",
+      nextLandmark: "衛生保健中心旁",
       coordinates: [
         [121.5402933,25.0175803], [121.5401915,25.0175793], [121.5401915,25.0175396],
         [121.5401916,25.0175062], [121.540192,25.0173476], [121.5401924,25.0171626],
@@ -16,6 +17,7 @@ export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
     },
     {
       name: "小椰林道至土木系館前",
+      nextLandmark: "土木系館前",
       coordinates: [
         [121.5397211,25.0170747], [121.5394762,25.0170714], [121.5393983,25.0170703],
         [121.5391231,25.0170631], [121.539025,25.0170605], [121.5390102,25.0170601],
@@ -25,6 +27,7 @@ export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
     },
     {
       name: "愷元單車店、全家至小福廣場",
+      nextLandmark: "小福廣場",
       coordinates: [
         [121.5385255,25.0175921], [121.538407,25.0175905], [121.5383999,25.0175904],
         [121.5383107,25.0175892], [121.5382207,25.017588], [121.5381006,25.0175864],
@@ -36,6 +39,7 @@ export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
     },
     {
       name: "小福廣場至博雅東側坡道",
+      nextLandmark: "博雅東側戶外坡道",
       coordinates: [
         [121.5373794,25.0183803], [121.5373057,25.0183793], [121.5371735,25.0183775],
         [121.5371439,25.0183771], [121.5371432,25.0184143], [121.5371702,25.0184146],
@@ -45,6 +49,7 @@ export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
     },
     {
       name: "博雅館內至西側出口",
+      nextLandmark: "博雅西側",
       approximate: true,
       coordinates: [
         [121.537278,25.018922], [121.5362,25.0188],
@@ -54,6 +59,7 @@ export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
   back: [
     {
       name: "博雅西側至普通教學館",
+      nextLandmark: "普通教學館",
       coordinates: [
         [121.5362,25.0188], [121.5362179,25.0187519], [121.5362184,25.0187176],
         [121.5362598,25.0187181], [121.5363209,25.0187188], [121.5365569,25.0187217],
@@ -62,6 +68,7 @@ export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
     },
     {
       name: "普通教學館旁經蒲葵道接水杉道",
+      nextLandmark: "水杉道",
       coordinates: [
         [121.5365929,25.0187221], [121.5368332,25.018725], [121.5368799,25.0187255],
         [121.5370952,25.0187281], [121.5371666,25.018729], [121.5371702,25.0184146],
@@ -75,6 +82,7 @@ export const walkedSections: Record<"out" | "back", WalkedSection[]> = {
     },
     {
       name: "水杉道經第一學生活動中心至總圖前廣場",
+      nextLandmark: "總圖前廣場",
       coordinates: [
         [121.5398144,25.0184144], [121.5401747,25.0184173], [121.5404087,25.0184191],
         [121.5404094,25.0183419], [121.5404112,25.0181187], [121.5404116,25.0180748],

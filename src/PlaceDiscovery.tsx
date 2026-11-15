@@ -4,13 +4,24 @@ import type {LucideIcon} from 'lucide-react'
 import type {CatalogCategory,CatalogPlace,Entrance,Mode,PlaceCatalog} from './types'
 import {categoryLabels,findPlaces,placeCategories} from './places'
 import {distance,formatDate,formatDistance} from './routes'
-import {fieldObservation} from './field-observations'
+import {fieldKinds,fieldObservation,formatFieldAngle} from './field-observations'
+import type {FieldObservation} from './field-observations'
 import PhotoGallery from './PhotoGallery'
 import './place-discovery.css'
 
 const categoryIcons:Record<CatalogCategory,LucideIcon>={building:Building2,toilet:Toilet,elevator:ArrowUpDown,water:Droplets,rest:Armchair,ramp:ArrowUpRight,landmark:MapPin,field:Camera}
 const facilityCategories:CatalogCategory[]=['field','ramp','toilet','water','elevator','rest','building','landmark']
 export function PlaceIcon({category,size=19}:{category:CatalogCategory;size?:number}){const Icon=categoryIcons[category];return <Icon size={size} aria-hidden="true"/>}
+
+export function FieldSymbol({kind}:{kind:FieldObservation['kind']}) {
+  return <span className={`field-symbol field-kind-${kind}`} aria-hidden="true">{fieldKinds[kind].symbol}</span>
+}
+
+export function FieldSummary({point}:{point:FieldObservation}) {
+  return <small>{[
+    fieldKinds[point.kind].label, point.level, point.width && `約 ${point.width.cm} 公分`, point.attention,
+  ].filter(Boolean).join(' · ')}</small>
+}
 
 interface SearchProps{
   places:CatalogPlace[];query:string;category?:CatalogCategory;selected?:CatalogPlace;recent:string[]
@@ -37,7 +48,7 @@ export function PlaceSearch({places,query,category,selected,recent,onQuery,onCho
         if(option)choose(option)
         else{setOpen(false);onBrowse()}
       }}>
-        <Search size={21} aria-hidden="true"/>
+        <button className="place-search-submit" type="submit" aria-label="搜尋或查看地點清單"><Search size={21} aria-hidden="true"/></button>
         <input id="place-search-input" aria-label="搜尋校園地點" role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={open?'place-suggestions':undefined} aria-activedescendant={open&&active>=0&&options[active]?`place-suggestion-${active}`:undefined} placeholder="搜尋地點與設施" autoComplete="off" value={query} onFocus={()=>{if(more.current)more.current.open=false;setOpen(true);setActive(-1)}} onChange={event=>{onQuery(event.target.value);setOpen(true);setActive(-1)}} onKeyDown={event=>{
           if(event.key==='Escape'){event.preventDefault();setOpen(false);setActive(-1)}
           if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();setOpen(true);setActive(index=>options.length?event.key==='ArrowDown'?Math.min(index+1,options.length-1):index<0?options.length-1:Math.max(0,index-1):-1)}
@@ -45,8 +56,15 @@ export function PlaceSearch({places,query,category,selected,recent,onQuery,onCho
         {(query||selected||category)&&<button className="place-search-clear" type="button" aria-label="清除搜尋並返回路線" onClick={()=>{onClear();setOpen(false);setActive(-1)}}><X size={20}/></button>}
       </form>
       {open&&<div className="place-suggestions">
-        <div className="suggestions-heading"><span>{query.trim()?'搜尋建議':recentPlaces.length?'最近查看與附近地點':'附近地點'}</span>{!query.trim()&&recentPlaces.length>0&&<button onClick={onClearRecent}>清除最近查看</button>}</div>
-        <ul id="place-suggestions" role="listbox" aria-label="地點搜尋建議">{options.map((place,index)=><li key={place.id} role="presentation"><button type="button" role="option" id={`place-suggestion-${index}`} aria-selected={active===index} tabIndex={-1} onMouseDown={event=>event.preventDefault()} onMouseEnter={()=>setActive(index)} onClick={()=>choose(place)}><span className={`place-category-icon ${place.category}`}>{recent.includes(place.id)&&!query.trim()?<Clock size={18} aria-hidden="true"/>:<PlaceIcon category={place.category}/>}</span><span><strong>{place.name}</strong><small>{categoryLabels[place.category]}{place.routePlaceId?' · 支援校園選路':place.category==='field'?' · 現場紀錄':' · 公開點位'}</small></span><ArrowUpRight size={17} aria-hidden="true"/></button></li>)}</ul>
+        <div className="suggestions-heading"><span>{query.trim()?'搜尋建議':recentPlaces.length?'最近查看與校園地點':'校園地點'}</span>{!query.trim()&&recentPlaces.length>0&&<button onClick={onClearRecent}>清除最近查看</button>}</div>
+        <ul id="place-suggestions" role="listbox" aria-label="地點搜尋建議">{options.map((place,index)=>{
+          const field = fieldObservation(place.id)
+          return <li key={place.id} role="presentation"><button type="button" role="option" id={`place-suggestion-${index}`} aria-selected={active===index} tabIndex={-1} onMouseDown={event=>event.preventDefault()} onClick={()=>choose(place)}>
+            {field ? <FieldSymbol kind={field.kind} /> : <span className={`place-category-icon ${place.category}`}>{recent.includes(place.id)&&!query.trim()?<Clock size={18} aria-hidden="true"/>:<PlaceIcon category={place.category}/>}</span>}
+            <span><strong>{place.name}</strong><small>{field ? `實勘 · ${fieldKinds[field.kind].label}` : `${categoryLabels[place.category]} · 公開圖資`}</small></span>
+            <ArrowUpRight size={17} aria-hidden="true"/>
+          </button></li>
+        })}</ul>
         {!options.length&&<p className="suggestions-empty">找不到「{query.slice(0,50)}」。試試「總圖」「博雅」或設施類別。</p>}
         <button className="suggestions-all" onClick={()=>{setOpen(false);onBrowse()}}>查看{query.trim()?'全部搜尋結果':'地點清單'}<ArrowRight size={16}/></button>
         <p className="suggestions-scope">搜尋總圖與博雅周邊的設施和實勘點</p>
@@ -84,12 +102,11 @@ export function PlaceList({catalog,results,category,title,onChoose,onBack,loadin
     {results.length ? <>
       <ul className="place-result-list">{results.slice(0,limit).map(place=>{
         const field=fieldObservation(place.id)
-        const values=field?.readings?.map(reading=>reading.value)??['現場照片']
-        return <li key={place.id}><button onClick={()=>onChoose(place)}>
-          <span className={`place-category-icon ${place.category}`}><PlaceIcon category={place.category} size={22}/></span>
+        return <li key={place.id}><button id={`result-${place.id}`} onClick={()=>onChoose(place)}>
+          {field ? <FieldSymbol kind={field.kind} /> : <span className={`place-category-icon ${place.category}`}><PlaceIcon category={place.category} size={22}/></span>}
           <span className="place-result-text"><strong>{place.name}</strong>
-            {field ? <small>{[place.level, ...values].filter(Boolean).join(' · ')}</small> : <>
-              <small>{categoryLabels[place.category]}{place.routePlaceId?' · 支援校園選路':''}</small>
+            {field ? <FieldSummary point={field} /> : <>
+              <small>{categoryLabels[place.category]} · 公開圖資</small>
               {reference&&<small>距總圖中心直線 {formatDistance(distance(reference.coordinate,place.coordinate))}</small>}
             </>}
           </span><ChevronRight size={16} aria-hidden="true"/>
@@ -98,7 +115,6 @@ export function PlaceList({catalog,results,category,title,onChoose,onBack,loadin
       {results.length>limit&&<button className="button secondary wide" onClick={()=>setLimit(n=>n+45)}>顯示更多地點</button>}
     </> : !loading && <div className="place-empty"><Search size={30} aria-hidden="true"/><p>{category?`目前沒有${categoryLabels[category]}點位資料。`:'找不到符合的地點。可試試其他關鍵字。'}</p></div>}
     {showAllFieldPoints&&<button className="button secondary wide field-show-all" onClick={showAllFieldPoints}>查看全部實勘點</button>}
-    {reference&&results.some(place=>place.category!=='field')&&<p className="place-data-note">清單顯示直線距離。</p>}
   </section>
 }
 
@@ -118,21 +134,31 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
       <button className="back-link" onClick={onClose}><ArrowLeft size={17}/>{backLabel}</button>
       <button className="field-share" onClick={share}><Copy size={16}/>分享</button>
     </div>
-    <p className="field-card-date"><PlaceIcon category="field" size={16}/>{['實勘紀錄', place.level, formatDate(place.retrievedAt)].filter(Boolean).join(' · ')}</p>
+    <p className="field-card-type"><FieldSymbol kind={field.kind} />{['實勘', fieldKinds[field.kind].label, place.level && `${place.level}（圖上約略位置）`].filter(Boolean).join(' · ')}</p>
     <h1 id="place-heading" ref={heading} tabIndex={-1}>{place.name}</h1>
     {shareStatus}
     <p className="field-observation-note">{place.note}</p>
-    {field.readings&&<dl className="field-readings">{field.readings.map(({label,value,context})=><div key={label}>
-      <dt>{label}</dt><dd><strong>{value}</strong><span>{context}</span></dd>
-    </div>)}</dl>}
+    {field.width && <dl className="field-readings"><div>
+      <dt>{field.width.label}</dt><dd><strong>約 {field.width.cm} 公分</strong><span>{field.width.context}</span></dd>
+    </div></dl>}
+    {(field.angles || field.facilityCategory === 'ramp') && <p className="field-grade">
+      {field.angles ? '行進方向坡度尚未確認，手機單點讀值見下方資料說明。' : '尚無行進方向的坡度資料。'}
+    </p>}
     <section className="place-photo-section"><h2>現場照片</h2><PhotoGallery photos={place.photos}/></section>
     {field.video&&<section className="place-photo-section field-video">
       <h2>現場短片</h2>
       <video controls playsInline preload="none" poster={place.photos[0]?.src} aria-label={`${place.name}現場短片`}><source src={field.video.src} type="video/mp4"/></video>
       <p>{field.video.caption}</p>
     </section>}
+    <p className="field-card-date">實勘日期 {formatDate(place.retrievedAt)}</p>
     <details className="field-source">
-      <summary>位置與素材來源</summary>
+      <summary>量測、位置與來源</summary>
+      {field.angles && <>
+        <p>以下是手機畫面的單點傾角。手機是否沿輪椅行進方向放置，尚未確認。</p>
+        <dl className="field-angles">{field.angles.map(({instrument,degrees,source})=><div key={source}>
+          <dt>{instrument} <strong>{formatFieldAngle(degrees)}</strong></dt><dd>{source}</dd>
+        </div>)}</dl>
+      </>}
       <p>{field.location}</p>
       <p>{source?.label??'第 11 組實勘紀錄'} · {field.files}</p>
     </details>

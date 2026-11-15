@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, Camera, ChevronDown, ChevronRight, Copy, Info, LoaderCircle, MessageSquare, Printer, Route as RouteIcon, TriangleAlert, X } from 'lucide-react'
 import CampusMap, { colors } from './CampusMap'
 import type { Campus, CatalogCategory, CatalogPlace, Coordinate, Entrance, NavigationState, Route, Segment } from './types'
-import { buildWalkedRoutes } from './walked-routes'
-import { formatDate, formatDistance, fromHash, lineDistance, lineMidpoint, metrics } from './routes'
+import { buildWalkedRoutes, walkedDistanceLabel } from './walked-routes'
+import { formatDate, formatDistance, fromHash, lineDistance, lineMidpoint } from './routes'
 import { publicHash, publicNavigation } from './public-navigation'
 import { favoriteFor, readFavorites, resolveSharedRoute, writeFavorites } from './product'
 import type { Favorite } from './product'
@@ -20,8 +20,9 @@ import { CommunityDialog, CommunitySection } from './Community'
 import { useCommunity } from './useCommunity'
 import { usePlaceCatalog } from './usePlaceCatalog'
 import { categoryLabels, clearRecentPlaces, findPlaces, placeEndpointPatch, readRecentPlaces, rememberPlace } from './places'
-import { CatalogStatus, PlaceCard, PlaceList, PlaceSearch } from './PlaceDiscovery'
+import { CatalogStatus, FieldSummary, FieldSymbol, PlaceCard, PlaceList, PlaceSearch } from './PlaceDiscovery'
 import { fieldObservation } from './field-observations'
+import type { FieldObservation } from './field-observations'
 import './product.css'
 import './campus-design.css'
 import './route-experience.css'
@@ -35,7 +36,7 @@ const navItems = [
 ] as const
 
 function defaultSheetSize(state: NavigationState): SheetSize {
-  if (state.placeId?.startsWith('field-') || state.category === 'field') return 'full'
+  if (!state.placeId && state.category === 'field') return 'full'
   return state.screen === 'compare' && !state.placeId && !state.category ? 'map' : 'half'
 }
 
@@ -47,7 +48,7 @@ function DirectionPicker({ routes, onOpen }: { routes: Route[]; onOpen: (route: 
         const returning = route.id === 'walk-back'
         return <button key={route.id} onClick={() => onOpen(route)} aria-label={`查看${route.name}`}>
           <span className="walked-picker-line" style={{ backgroundColor: returning ? colors['walk-back'] : colors['walk-out'] }} aria-hidden="true" />
-          <span><strong>{returning ? '回程' : '去程'}<small>約 {formatDistance(metrics(route).distanceM)}</small></strong>
+          <span><strong>{returning ? '回程' : '去程'}<small>{walkedDistanceLabel(route).replace('圖上估算', '')}</small></strong>
             <span>{returning ? '博雅西側 → 總圖' : '總圖 → 博雅西側'}</span>
           </span>
         </button>
@@ -82,6 +83,16 @@ function EndpointCard({ entrance, label }: { entrance: Entrance; label: string }
   </details>
 }
 
+function FieldLinks({ points, prefix, onSelect }: { points: FieldObservation[]; prefix: string; onSelect: (id: string) => void }) {
+  return <ul className="segment-field-links">
+    {points.map(point => <li key={point.id}><button id={`${prefix}-${point.id}`} onClick={() => onSelect(point.id)}>
+      <FieldSymbol kind={point.kind} />
+      <span className="field-link-text"><strong>{point.name}</strong><FieldSummary point={point} /></span>
+      <ChevronRight size={17} aria-hidden="true" />
+    </button></li>)}
+  </ul>
+}
+
 function SegmentInfo({ segment, onSelectField }: { segment: Segment; onSelectField: (id: string) => void }) {
   const fields = (segment.fieldPointIds ?? []).flatMap(id => fieldObservation(id) ?? [])
   const facts = [
@@ -90,17 +101,12 @@ function SegmentInfo({ segment, onSelectField }: { segment: Segment; onSelectFie
     ['最大階差', segment.stepHeightCm, ' 公分'],
   ] as const
   return <section className="segment-info walked-segment-info" aria-labelledby="field-section-heading">
-    <div className="section-heading"><h2 id="field-section-heading" tabIndex={-1}>現場紀錄</h2>{fields.length > 0 && segment.retrievedAt && <span>最近紀錄 {formatDate(segment.retrievedAt)}</span>}</div>
+    <h2 id="field-section-heading" tabIndex={-1}>目前路段</h2>
     <h3 className="field-segment-name">{segment.name}</h3>
-    {fields.length ? <div className="segment-field-links">
-      {fields.map(point => {
-        const values = point.readings?.map(reading => reading.value) ?? ['現場照片']
-        return <button key={point.id} onClick={() => onSelectField(point.id)}>
-          <span><strong>{point.name}</strong><small>{[point.level, ...values].filter(Boolean).join(' · ')}</small></span>
-          <ChevronRight size={17} aria-hidden="true" />
-        </button>
-      })}
-    </div> : <p className="segment-no-points">這段沒有個別點位紀錄。</p>}
+    {segment.nextLandmark && <p className="segment-landmark">下一個地標 <strong>{segment.nextLandmark}</strong></p>}
+    {segment.approximate && <p className="segment-indoor">組員由東側進入博雅一樓，再從西側出來。館內轉折尚未測繪。</p>}
+    {fields.length ? <FieldLinks points={fields} prefix="segment" onSelect={onSelectField} />
+      : <p className="segment-no-points">這一段尚無實勘點。</p>}
     <details className="evidence-details segment-measurements">
       <summary>全段通行資料<ChevronDown size={15} aria-hidden="true" /></summary>
       <dl className="fact-grid">
@@ -112,6 +118,8 @@ function SegmentInfo({ segment, onSelectField }: { segment: Segment; onSelectFie
     </details>
   </section>
 }
+
+type PanelView = { size: SheetSize; scrollTop: number; focusId?: string }
 
 export default function App() {
   const [state, setState] = useState(() => publicNavigation(fromHash(window.location.hash)))
@@ -136,6 +144,9 @@ export default function App() {
   const community = useCommunity(!!campus)
   const mobile = useMediaQuery('(max-width: 760px), (max-height: 540px) and (max-width: 1000px)')
   const panelRef = useRef<HTMLElement>(null)
+  const routeView = useRef<(PanelView & { segmentId: string }) | null>(null)
+  const listView = useRef<PanelView | null>(null)
+  const panelRestore = useRef<PanelView | null>(null)
 
   const discovering = !!state.placeId || !!state.category || !!placeQuery.trim() || browsingPlaces
   const selectedPlace = catalog?.places.find(place => place.id === state.placeId)
@@ -147,7 +158,8 @@ export default function App() {
 
   const routes = useMemo(buildWalkedRoutes, [])
   const communitySegments = useMemo(() => routes.flatMap(route => route.segments.map(segment => ({
-    id: segment.id, name: segment.name, routeName: route.name, coordinate: lineMidpoint(segment.coordinates), coordinates: segment.coordinates,
+    id: segment.id, name: segment.name, routeName: route.name, coordinate: lineMidpoint(segment.coordinates),
+    coordinates: segment.approximate ? undefined : segment.coordinates, approximate: segment.approximate,
   }))), [routes])
   const resolved = resolveSharedRoute(routes, state)
   const selected = resolved.route ?? (state.screen === 'compare' ? routes[0] : undefined)
@@ -155,8 +167,25 @@ export default function App() {
   const tourRoute = selected && !resolved.problem && !discovering && state.screen === 'detail' ? selected : null
   const tour = useRouteTour(tourRoute, state.segmentId)
   const activeSegment = tourRoute && tour.engaged && tour.position ? tour.position.leg.segment : baseSegment
-  const routeFieldIds = selected?.segments.flatMap(segment => segment.fieldPointIds ?? []) ?? []
+  const routeFieldIds = [...new Set(selected?.segments.flatMap(segment => segment.fieldPointIds ?? []) ?? [])]
+  const routeAttention = routeFieldIds.flatMap(id => {
+    const point = fieldObservation(id)
+    return point?.attention ? [point] : []
+  })
   const mapScreen = state.screen !== 'help' && state.screen !== 'saved'
+  const hasPlaceList = !!state.category || browsingPlaces || !!placeQuery.trim()
+
+  const currentPanel = () => panelRef.current?.querySelector<HTMLElement>('.panel-main')
+  const capturePanelView = (): PanelView => ({
+    size: sheetSize,
+    scrollTop: currentPanel()?.scrollTop ?? 0,
+    focusId: panelRef.current?.contains(document.activeElement) ? document.activeElement?.id : undefined,
+  })
+  const rememberRouteView = () => {
+    if (!discovering && state.screen === 'detail' && activeSegment) {
+      routeView.current = { ...capturePanelView(), segmentId: activeSegment.id }
+    }
+  }
 
   useEffect(() => {
     const handler = () => {
@@ -164,20 +193,37 @@ export default function App() {
       if (next.screen !== state.screen || next.placeId !== state.placeId || next.category !== state.category) {
         setSheetSize(defaultSheetSize(next))
         if (next.screen !== state.screen || !next.category) setFieldGroup(undefined)
-        if (next.screen !== state.screen || next.placeId) setPlaceQuery('')
-        if (next.screen !== state.screen) setBrowsingPlaces(false)
+        if (next.screen !== state.screen) {
+          setPlaceQuery('')
+          setBrowsingPlaces(false)
+          routeView.current = null
+          listView.current = null
+        } else if (!next.placeId && !next.category && !placeQuery.trim() && !browsingPlaces && routeView.current?.segmentId === next.segmentId) {
+          panelRestore.current = routeView.current
+          setSheetSize(routeView.current.size)
+          routeView.current = null
+        }
       }
       setState(next)
     }
     window.addEventListener('hashchange', handler)
     return () => window.removeEventListener('hashchange', handler)
-  }, [state])
+  }, [state, placeQuery, browsingPlaces])
   useEffect(() => {
     panelRef.current?.querySelector('.panel-main')?.scrollTo({ top: 0 })
     const heading = document.getElementById('place-heading') ?? document.getElementById('direction-picker') ?? document.getElementById('panel-heading')
     heading?.focus({ preventScroll: true })
-  }, [state.screen, loading])
-  useEffect(() => { panelRef.current?.querySelector('.panel-main')?.scrollTo({ top: 0 }) }, [state.placeId, state.category, placeQuery, fieldGroup])
+  }, [state.screen, state.routeId, loading])
+  useEffect(() => {
+    const restore = panelRestore.current
+    panelRestore.current = null
+    currentPanel()?.scrollTo({ top: restore?.scrollTop ?? 0 })
+    if (restore) {
+      const fallback = document.getElementById('place-heading') ?? document.getElementById('panel-heading')
+      const target = restore.focusId ? document.getElementById(restore.focusId) ?? fallback : fallback
+      target?.focus({ preventScroll: true })
+    }
+  }, [state.placeId, state.category, placeQuery, fieldGroup, browsingPlaces])
 
   const navigate = (patch: Partial<NavigationState>) => {
     const next = publicNavigation({ ...state, ...(patch.screen ? { placeId: undefined, category: undefined } : {}), ...patch })
@@ -186,18 +232,27 @@ export default function App() {
       setPlaceFeedback('')
       setBrowsingPlaces(false)
       setSheetSize(defaultSheetSize(next))
+      routeView.current = null
+      listView.current = null
     }
     if (patch.screen || 'category' in patch && next.category !== 'field') setFieldGroup(undefined)
     setState(next)
     const hash = publicHash(next)
-    if (window.location.hash !== hash) window.location.hash = hash
+    if (window.location.hash !== hash) window.history.pushState(null, '', hash)
     setCopyMessage('')
     setCopyFallback(false)
     setFavoriteMessage('')
     if (state.screen === 'saved' && patch.screen && patch.screen !== 'saved') setUndoFavorites(null)
   }
   const showDirections = () => navigate({ screen: 'compare', routeId: '', segmentId: '' })
-  const openRoute = (route: Route, segmentId = route.segments[0]?.id ?? '') => navigate({ screen: 'detail', origin: route.originEntrance.placeId, routeId: route.id, segmentId })
+  const openRoute = (route: Route, segmentId = route.segments[0]?.id ?? '') => {
+    tour.pause()
+    if (state.screen === 'detail' && state.routeId === route.id && !discovering) {
+      navigate({ segmentId })
+    } else {
+      navigate({ screen: 'detail', origin: route.originEntrance.placeId, routeId: route.id, segmentId })
+    }
+  }
   const routeLink = `${window.location.origin}${window.location.pathname}${publicHash({ ...state, screen: 'detail', routeId: selected?.id ?? state.routeId, placeId: undefined, category: undefined })}`
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(routeLink); setCopyMessage('路線連結已複製') }
@@ -221,7 +276,7 @@ export default function App() {
     tour.pause()
     if (selected) openRoute(selected, segment.id)
     if (mobile) setSheetSize('full')
-    requestAnimationFrame(() => document.getElementById('field-section-heading')?.focus({ preventScroll: true }))
+    requestAnimationFrame(() => document.getElementById('field-section-heading')?.focus())
   }
   const startTour = () => {
     if (mobile) {
@@ -240,22 +295,27 @@ export default function App() {
     return true
   }
   const clearDiscovery = () => {
+    const savedView = routeView.current
+    panelRestore.current = savedView
+    routeView.current = null
+    listView.current = null
     setPlaceQuery('')
     setPlaceFeedback('')
     setBrowsingPlaces(false)
-    navigate({ placeId: undefined, category: undefined })
-    setSheetSize(defaultSheetSize({ ...state, placeId: undefined, category: undefined }))
-    requestAnimationFrame(() => (document.getElementById('direction-picker') ?? document.getElementById('panel-heading'))?.focus({ preventScroll: true }))
+    navigate({ placeId: undefined, category: undefined, segmentId: savedView?.segmentId ?? state.segmentId })
+    setSheetSize(savedView?.size ?? defaultSheetSize({ ...state, placeId: undefined, category: undefined }))
+    if (!savedView) requestAnimationFrame(() => (document.getElementById('direction-picker') ?? document.getElementById('panel-heading'))?.focus({ preventScroll: true }))
   }
   const choosePlace = (place: CatalogPlace) => {
+    rememberRouteView()
+    if (hasPlaceList && !state.placeId) listView.current = capturePanelView()
     tour.pause()
-    setPlaceQuery('')
     setPlaceFeedback('')
     const recent = rememberPlace(place.id, recentPlaces)
     setRecentPlaces(recent.ids)
     if (!recent.saved) setPlaceFeedback('最近查看無法儲存在此瀏覽器。')
-    navigate({ placeId: place.id })
-    setSheetSize(place.category === 'field' ? 'full' : 'half')
+    navigate({ placeId: place.id, segmentId: routeView.current?.segmentId ?? state.segmentId })
+    setSheetSize('half')
   }
   const choosePlaceById = (id: string) => {
     const place = catalog?.places.find(item => item.id === id)
@@ -263,30 +323,34 @@ export default function App() {
   }
   const chooseCategory = (category: CatalogCategory) => {
     if (state.category === category && !fieldGroup) { clearDiscovery(); return }
+    rememberRouteView()
     tour.pause()
     setFieldGroup(undefined)
     setPlaceQuery('')
     setPlaceFeedback('')
     setBrowsingPlaces(false)
-    navigate({ category, placeId: undefined })
+    navigate({ category, placeId: undefined, segmentId: routeView.current?.segmentId ?? state.segmentId })
     setSheetSize('full')
     requestAnimationFrame(() => document.getElementById('place-heading')?.focus({ preventScroll: true }))
   }
   const chooseFieldGroup = (ids: string[], title = '附近實勘點') => {
+    rememberRouteView()
     tour.pause()
     setPlaceQuery('')
     setPlaceFeedback('')
     setBrowsingPlaces(false)
     setFieldGroup({ ids, title })
-    navigate({ category: 'field', placeId: undefined })
+    navigate({ category: 'field', placeId: undefined, segmentId: routeView.current?.segmentId ?? state.segmentId })
     setSheetSize('full')
     requestAnimationFrame(() => document.getElementById('place-heading')?.focus({ preventScroll: true }))
   }
-  const hasPlaceList = !!state.category || browsingPlaces
   const closePlace = () => {
     if (!hasPlaceList) { clearDiscovery(); return }
+    panelRestore.current = listView.current
+    setSheetSize(listView.current?.size ?? 'full')
+    if (!listView.current) requestAnimationFrame(() => document.getElementById('place-heading')?.focus({ preventScroll: true }))
+    listView.current = null
     navigate({ placeId: undefined })
-    requestAnimationFrame(() => document.getElementById('place-heading')?.focus({ preventScroll: true }))
   }
   const setPlaceEndpoint = (action: 'from' | 'to') => {
     const patch = selectedPlace && placeEndpointPatch(selectedPlace, action)
@@ -324,7 +388,7 @@ export default function App() {
         {loading ? <><LoaderCircle className="spinner" size={28} /><h1>載入校園路線</h1></>
           : loadError && <><TriangleAlert size={32} /><h1>地圖資料暫時無法載入</h1><button className="button primary" onClick={retryCampus}>重新載入</button></>}
       </main>
-      : <main className={`workspace route-workspace ${catalog ? 'has-discovery' : ''}`} data-discovering={discovering} data-sheet={sheetSize} data-screen={state.screen}>
+      : <main className={`workspace route-workspace ${catalog ? 'has-discovery' : ''}`} data-discovering={discovering} data-has-place={!!selectedPlace} data-sheet={sheetSize} data-screen={state.screen}>
       <MapSheet label={discovering ? '地點資訊' : state.screen === 'compare' ? '選擇方向' : '路線資訊'} size={sheetSize} onSize={setSheetSize}
         showControls={state.screen !== 'compare' || discovering || sheetSize !== 'map'} mobile={mobile} panelRef={panelRef} collapsed={collapsed}>
         <div className="panel-main" key={state.screen}>
@@ -349,39 +413,51 @@ export default function App() {
               <h1 id="panel-heading" tabIndex={-1}>選擇方向</h1>
               <div className="route-cards direction-cards">{routes.map(route => <button key={route.id} className={`route-card walked-route-card ${route.id === 'walk-back' ? 'direct' : 'gentle'}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}>
                 <div className="route-card-top"><span className="route-card-icon"><RouteIcon size={20} aria-hidden="true" /></span>
-                  <div><strong>{route.name}</strong><span>{route.description}</span><small className="walked-route-distance">圖上約 {formatDistance(metrics(route).distanceM)}</small></div>
+                  <div><strong>{route.name}</strong><span>{route.description}</span><small className="walked-route-distance">{walkedDistanceLabel(route)}</small></div>
                   <ChevronRight className="walked-route-open" size={18} aria-hidden="true" />
                 </div>
               </button>)}</div>
             </> : selected && <>
               <div className="route-heading">
-                <button className="back-link" onClick={state.screen === 'confirm' ? () => openRoute(selected, state.segmentId) : showDirections}><ArrowLeft size={17} aria-hidden="true" />{state.screen === 'confirm' ? '返回路線' : '更換方向'}</button>
+                <div className="route-heading-tools">
+                  <button className="back-link" onClick={state.screen === 'confirm' ? () => openRoute(selected, state.segmentId) : showDirections}><ArrowLeft size={17} aria-hidden="true" />{state.screen === 'confirm' ? '返回路線' : '更換方向'}</button>
+                  <p className="route-distance">{walkedDistanceLabel(selected)}</p>
+                </div>
                 <h1 id="panel-heading" tabIndex={-1}>{state.screen === 'confirm' ? '分享路線' : selected.name}</h1>
                 {state.screen === 'confirm' && <p>{selected.name}</p>}
-                <p className="route-distance">圖上約 {formatDistance(metrics(selected).distanceM)}</p>
+                <p className="route-endpoints">{selected.originEntrance.name} → {selected.destinationEntrance.name}</p>
               </div>
 
               {state.screen === 'detail' && activeSegment && <>
+                <section className="route-attention" aria-labelledby="route-attention-heading">
+                  <h2 id="route-attention-heading">沿途注意</h2>
+                  <FieldLinks points={routeAttention} prefix="attention" onSelect={choosePlaceById} />
+                  <button id="route-all-field-points" className="button secondary wide" onClick={() => chooseFieldGroup(routeFieldIds, '沿途實勘')}><Camera size={17} aria-hidden="true" />查看沿途實勘（{routeFieldIds.length}）</button>
+                </section>
+                <p className="walked-limits">全段坡度、路寬、階差、階梯及路面仍未完整量測。</p>
                 <p className="detail-route-description">{selected.description}</p>
-                <div className="route-primary-actions">
-                  {routeFieldIds.length > 0 && <button className="button primary" onClick={() => chooseFieldGroup(routeFieldIds, '沿途實勘')}><Camera size={17} aria-hidden="true" />查看沿途實勘</button>}
-                  <button className="button secondary" onClick={() => navigate({ screen: 'confirm', routeId: selected.id })}><Bookmark size={16} aria-hidden="true" />分享或收藏</button>
-                </div>
                 <details className="walked-segment-picker">
-                  <summary>切換路段<small>{selected.segments.findIndex(segment => segment.id === activeSegment.id) + 1} / {selected.segments.length}</small><ChevronDown size={16} aria-hidden="true" /></summary>
+                  <summary>逐段查看<small>第 {selected.segments.findIndex(segment => segment.id === activeSegment.id) + 1} 段</small><ChevronDown size={16} aria-hidden="true" /></summary>
                   <div className="segment-tabs" role="group" aria-label="選擇路段">{selected.segments.map((segment, index) => <button key={segment.id} aria-label={`第 ${index + 1} 段，${segment.name}`} aria-pressed={activeSegment.id === segment.id} className={activeSegment.id === segment.id ? 'active' : ''} onClick={event => {
                     tour.pause()
                     navigate({ segmentId: segment.id })
                     const picker = event.currentTarget.closest<HTMLDetailsElement>('details')
-                    if (picker) { picker.open = false; picker.querySelector('summary')?.focus({ preventScroll: true }) }
-                  }}><span>{index + 1}</span><div><strong>{segment.name}</strong><small>{formatDistance(lineDistance(segment.coordinates))}</small></div><ChevronRight size={15} aria-hidden="true" /></button>)}</div>
+                    if (picker) picker.open = false
+                    requestAnimationFrame(() => document.getElementById('field-section-heading')?.focus())
+                  }}><span>{index + 1}</span><div><strong>{segment.name}</strong><small>{segment.approximate ? '館內走向約略' : formatDistance(lineDistance(segment.coordinates))}</small></div><ChevronRight size={15} aria-hidden="true" /></button>)}</div>
                 </details>
                 <SegmentInfo segment={activeSegment} onSelectField={choosePlaceById} />
                 {tourRoute && <details className="mobile-route-preview" onToggle={event => { if (!event.currentTarget.open) tour.pause() }}>
                   <summary>路線預演<ChevronDown size={16} aria-hidden="true" /></summary>
                   <RouteExplorer route={tourRoute} tour={tour} onInspect={inspectTourSegment} onStart={startTour} />
                 </details>}
-                <CommunitySection data={community} segmentId={activeSegment.id} onOpen={() => openCommunity(activeSegment.id)} onOpenPhoto={tour.pause} />
+                <div className="route-secondary-actions">
+                  <button className="button plain" onClick={() => navigate({ screen: 'confirm', routeId: selected.id })}><Bookmark size={16} aria-hidden="true" />分享或收藏</button>
+                </div>
+                <details className="mvp-route-reports">
+                  <summary>這一段的使用者回報</summary>
+                  <CommunitySection data={community} segmentId={activeSegment.id} onOpen={() => openCommunity(activeSegment.id)} onOpenPhoto={tour.pause} />
+                </details>
               </>}
 
               {state.screen === 'confirm' && <>
@@ -401,12 +477,14 @@ export default function App() {
 
       {catalog && <PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces}
         onQuery={value => {
+          if (value.trim()) rememberRouteView()
           tour.pause(); setFieldGroup(undefined); setBrowsingPlaces(false); setPlaceQuery(value)
           if (state.placeId || state.category) navigate({ placeId: undefined, category: undefined })
           setSheetSize(value.trim() ? 'half' : defaultSheetSize({ ...state, placeId: undefined, category: undefined }))
         }}
         onChoose={choosePlace} onCategory={chooseCategory} onClear={clearDiscovery}
         onBrowse={() => {
+          rememberRouteView()
           if (state.category || state.placeId) navigate({ category: undefined, placeId: undefined })
           setBrowsingPlaces(true)
           setSheetSize('full')
@@ -422,10 +500,11 @@ export default function App() {
         selectedPlaceId={state.placeId} discoveryActive={discovering} onSelectPlace={choosePlaceById} fieldGroupIds={fieldGroup?.ids}
         onSelectFieldGroup={chooseFieldGroup} onReturnRoutes={clearDiscovery} communityReports={community.reports}
         communitySegments={communitySegments} onSelectCommunity={openCommunity}
-        onLocationActivity={() => { tour.pause(); tour.setFollowing(false); if (discovering) clearDiscovery() }}
-        preview={tour.engaged && tour.position ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined}
+        mapObscured={mobile && sheetSize === 'full'}
+        onLocationActivity={() => { tour.pause(); tour.setFollowing(false) }}
+        preview={tour.engaged && tour.position && !tour.position.leg.segment.approximate ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined}
         onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }}
-        onSelectRoute={id => { const route = routes.find(item => item.id === id); if (route) openRoute(route) }}
+        onSelectRoute={id => { const route = routes.find(item => item.id === id); if (route) openRoute(route, id === selected?.id && state.segmentId ? state.segmentId : undefined) }}
         onSelectSegment={id => { const route = routes.find(item => item.segments.some(segment => segment.id === id)); if (route) openRoute(route, id) }} />
     </main>}
     <OfflineStatus />

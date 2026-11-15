@@ -51,13 +51,14 @@ export function HelpPage({ onDemo, onSources }: { onDemo: () => void; onSources?
       <h1 id="panel-heading" tabIndex={-1}>使用指南</h1>
       <ol className="help-steps mvp-help-steps">
         <li><strong>選擇方向</strong><p>去程從總圖前廣場到博雅西側，回程由博雅西側回到總圖。</p></li>
-        <li><strong>查看沿途實勘</strong><p>從路線打開「查看沿途實勘」，就能看到坡道、路面和狹窄處的照片與量測。</p></li>
+        <li><strong>查看沿途注意</strong><p>從路線或地圖點開坡道、路面和狹窄處，看試走觀察、照片與量測。</p></li>
         <li><strong>查找附近設施</strong><p>可搜尋地點，或從「更多設施」查飲水、廁所等資訊。</p></li>
       </ol>
       <button className="button primary" onClick={onDemo}>查看路線<ArrowRight size={17} aria-hidden="true" /></button>
       <details className="mvp-help-details">
         <summary>資料說明</summary>
-        <p>圖上距離是估算，館內虛線是約略走向。實勘卡上的寬度與角度是各點的讀值，全段資訊可從路段查看。</p>
+        <p>第 11 組實際走過去程與回程。圖上距離是估算，博雅館內轉折尚未測繪。實勘卡的寬度與手機角度是單點讀值，整段通行資料請從路段查看。</p>
+        <p>公開圖資用於底圖與設施。使用者回報另列於「路況」，可查看回報時間與內容。</p>
         {onSources && <button className="button secondary" onClick={onSources}>查看地圖來源</button>}
       </details>
       <details className="mvp-help-details">

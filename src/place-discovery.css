@@ -2,8 +2,9 @@
 .discovery-tools{position:absolute;inset:16px 80px auto 20px;z-index:850;display:flex;align-items:flex-start;gap:16px;pointer-events:none;min-width:0}
 .discovery-tools>*{pointer-events:auto}
 .place-search{position:relative;flex:0 0 var(--map-panel-width);width:var(--map-panel-width);max-width:100%;min-width:0}
-.place-search-field{height:52px;display:flex;align-items:center;gap:11px;padding:0 8px 0 16px;background:#fff;border:1px solid #aebecd;border-radius:10px;box-shadow:0 3px 14px #173e5b1a}
-.place-search-field>svg{color:#205db6;flex-shrink:0}
+.place-search-field{height:52px;display:flex;align-items:center;gap:2px;padding:0 5px 0 3px;background:#fff;border:1px solid #aebecd;border-radius:10px;box-shadow:0 3px 14px #173e5b1a}
+.place-search-submit{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;background:transparent;color:#205db6;border-radius:8px}
+.place-search-submit:hover{background:#edf3fc}
 .place-search-field input{height:48px;border:0;box-shadow:none;background:transparent;font-size:14px;min-width:0;width:100%;padding:0;color:var(--ink)}
 .place-search-field:focus-within{outline:2px solid #205db6;outline-offset:2px}
 .place-search-field input:focus{outline:0;box-shadow:none}
@@ -98,21 +99,16 @@
 .catalog-place-label{box-shadow:none;color:#36516b;border-color:#bccbd8;font-size:11px;padding:4px 7px;border-radius:5px;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
 .route-workspace[data-discovering='true'] .map-legend{display:none}
 .route-workspace>.layer-popover{z-index:950}
-.catalog-map-marker.field-marker > span { border-color: #0e766a; color: #0e6259; background: #effcf8; }
-.catalog-map-marker.field-marker.selected > span { color: #fff; background: #0e766a; }
-.catalog-map-marker.field-cluster > span { width: 34px; height: 34px; border: 2px solid white; border-radius: 50%; background: #0d6559; color: #fff; box-shadow: 0 0 0 1px #0d6559, 0 2px 6px #172e3859; font-size: 14px; }
-.catalog-map-marker.field-cluster:hover > span, .catalog-map-marker.field-cluster:focus-visible > span { background: #084e45; box-shadow: 0 0 0 3px #0d6559; }
-.legend-field-point { display: grid; place-items: center; width: 19px; height: 20px; border: 1px solid #0e766a; border-radius: 6px; color: #0e6259; background: #effcf8; font-size: 10px; font-style: normal; }
 .place-category-icon.field { color: #0e6259; background: #e2f4ee; }
 .field-card .place-card-top { margin-bottom: 6px; }
 .field-share { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 8px; background: #fff; color: var(--green); font-size: 13px; }
 .field-share:hover { background: var(--selected); }
-.field-card-date { display: flex; align-items: center; gap: 6px; color: #48675f; font-size: 12px; margin: 0 0 4px; }
+.field-card-type { display: flex; align-items: center; gap: 6px; color: #48675f; font-size: 12px; margin: 0 0 4px; }
+.field-card-date { margin: 16px 0 0; font-size: 12px; color: var(--muted); }
+.field-grade { margin: 8px 0 14px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .field-observation-note { color: var(--ink); font-size: 14px; line-height: 1.75; margin: 8px 0 14px; }
 .field-readings { margin: 12px 0 16px; border: 1px solid #c6dcd5; border-radius: 8px; padding: 0 12px; background: #f3faf7; }
 .field-readings > div { padding: 9px 0; }
-.field-readings:has(> div + div) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.field-readings > div + div { padding-left: 12px; border-left: 1px solid #c6dcd5; }
 .field-readings dt { font-size: 12px; color: #48675f; }
 .field-readings dd { margin: 2px 0 0; }
 .field-readings dd strong { color: #155d52; font-size: 21px; font-variant-numeric: tabular-nums; }

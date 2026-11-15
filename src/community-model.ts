@@ -22,7 +22,7 @@ export interface ReportInput {
   segmentId: string; category: ReportCategory; impact: ReportImpact; message: string; authorName: string; observedAt: string
   coordinate?: Coordinate | null
 }
-export interface CommunitySegment { id: string; name: string; routeName: string; coordinate: Coordinate; coordinates?: Coordinate[] }
+export interface CommunitySegment { id: string; name: string; routeName: string; coordinate: Coordinate; coordinates?: Coordinate[]; approximate?: boolean }
 const hours: Record<ReportCategory, number> = { parking: 6, rough: 24 * 30, construction: 72, water: 12, traffic: 3, lighting: 24 * 7, other: 24 }
 
 export function reportState(report: CommunityReport, now = Date.now()): { label: string; kind: 'active' | 'stale' | 'resolved' | 'disputed' } {
