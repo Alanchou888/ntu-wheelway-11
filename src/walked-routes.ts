@@ -32,7 +32,9 @@ export function buildWalkedRoutes(): Route[] {
         obstacles: [], fieldPointIds,
         source: section.approximate
           ? '第 11 組由博雅東側進入一樓，再從西側出來。館內扶手坡道與廁所在一樓，途中轉折尚未測繪。'
-          : '第 11 組 2026/11/10 試走，依口述地標與 OpenStreetMap 步道重繪。',
+          : !outbound && index < 2
+            ? '第 11 組 2026/11/10 試走。博雅西側至蒲葵道依組員在地圖上描出的走法重繪，位置為約略。'
+            : '第 11 組 2026/11/10 試走，依口述地標與 OpenStreetMap 步道重繪。',
         sourceUrl: section.approximate ? undefined : 'https://www.openstreetmap.org/copyright',
         retrievedAt: '2026-11-10', verifiedAt: null,
       }
@@ -49,7 +51,7 @@ export function buildWalkedRoutes(): Route[] {
       id, kind: 'demo', walked: true, name: outbound ? '去程｜總圖到博雅西側' : '回程｜博雅西側到總圖',
       description: outbound
         ? '經保健中心、小椰林道、土木系館前與小福廣場，穿過博雅至西側。'
-        : '經普通教學館、蒲葵道、水杉道與第一學生活動中心旁。',
+        : '沿普通教學館南側，經蒲葵道、水杉道與第一學生活動中心旁。',
       originEntrance: endpoint(outbound, segments[0].coordinates[0]),
       destinationEntrance: endpoint(!outbound, segments.at(-1)!.coordinates.at(-1)!),
       segments,
