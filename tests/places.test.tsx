@@ -80,7 +80,8 @@ describe('place information disclosure',()=>{
     const field = fieldCatalog.places.find(place => place.id === 'field-boya-indoor-ramp')!
     const html = renderToStaticMarkup(<PlaceCard place={field} catalog={fieldCatalog} entrances={[]} mode="demo" onClose={()=>{}} onEndpoint={()=>{}} onChoose={()=>{}} shareUrl="https://example.test/"/>)
     expect(html).toContain('約 89 公分')
-    expect(html).toContain('行進方向坡度尚未確認')
+    expect(html).toContain('<dt>手機單點傾角</dt><dd><strong>−4°</strong>')
+    expect(html).toContain('行進方向的坡度尚未確認')
     expect(html).toContain('IMG_9238 約 00:00.87')
     expect(html).toContain('−4°')
     expect(html).toContain('博雅一樓位置圖')
