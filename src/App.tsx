@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bookmark, BookOpen, Camera, ChevronDown, ChevronRight, Copy, Info, LoaderCircle, MessageSquare, Printer, Route as RouteIcon, TriangleAlert, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, BookOpen, Camera, ChevronDown, ChevronRight, Copy, Info, LoaderCircle, Map as MapIcon, MessageSquare, Printer, Route as RouteIcon, TriangleAlert, X } from 'lucide-react'
 import CampusMap, { colors } from './CampusMap'
 import type { Campus, CatalogCategory, CatalogPlace, Coordinate, Entrance, NavigationState, Route, Segment } from './types'
 import { buildWalkedRoutes, walkedDistanceLabel } from './walked-routes'
@@ -31,7 +31,7 @@ import './road-conditions.css'
 import './mvp.css'
 
 const navItems = [
-  { screen: 'compare', label: '路線', icon: RouteIcon },
+  { screen: 'compare', label: '地圖', icon: MapIcon },
   { screen: 'saved', label: '收藏', icon: Bookmark },
   { screen: 'help', label: '說明', icon: BookOpen },
 ] as const
@@ -41,21 +41,26 @@ function defaultSheetSize(state: NavigationState): SheetSize {
   return state.screen === 'compare' && !state.placeId && !state.category ? 'map' : 'half'
 }
 
-function DirectionPicker({ routes, onOpen }: { routes: Route[]; onOpen: (route: Route) => void }) {
-  return <div className="direction-picker" id="direction-picker" tabIndex={-1} aria-labelledby="direction-heading">
-    <h1 id="direction-heading">選擇方向</h1>
-    <div className="walked-route-picker">
-      {routes.map(route => {
-        const returning = route.id === 'walk-back'
-        return <button key={route.id} onClick={() => onOpen(route)} aria-label={`查看${route.name}`}>
-          <span className="walked-picker-line" style={{ backgroundColor: returning ? colors['walk-back'] : colors['walk-out'] }} aria-hidden="true" />
-          <span><strong>{returning ? '回程' : '去程'}<small>{walkedDistanceLabel(route).replace('圖上估算', '')}</small></strong>
-            <span>{returning ? '博雅西側 → 總圖' : '總圖 → 博雅西側'}</span>
-          </span>
-        </button>
-      })}
+function DemoRoutePicker({ routes, onOpen, headingId }: { routes: Route[]; onOpen: (route: Route) => void; headingId: string }) {
+  return <section className="direction-picker" aria-labelledby={headingId}>
+    <div className="demo-route-heading">
+      <RouteIcon size={20} aria-hidden="true" />
+      <div><h1 id={headingId} tabIndex={-1}>示範路線</h1><p>第 11 組試走紀錄</p></div>
     </div>
-  </div>
+    <ul className="walked-route-picker">
+      {routes.map(route => {
+        const [direction, endpoints] = route.name.split('｜')
+        return <li key={route.id}><button onClick={() => onOpen(route)} aria-label={`查看${route.name}`}>
+          <span className="walked-picker-line" style={{ backgroundColor: colors[route.id as keyof typeof colors] ?? colors.survey }} aria-hidden="true" />
+          <span><strong>{direction}</strong>
+            {endpoints && <span>{endpoints}</span>}
+            <small>{walkedDistanceLabel(route).replace('圖上估算', '')}</small>
+          </span>
+          <ChevronRight className="demo-route-chevron" size={16} aria-hidden="true" />
+        </button></li>
+      })}
+    </ul>
+  </section>
 }
 
 function SourceDialog({ campus, onClose }: { campus: Campus; onClose: () => void }) {
@@ -213,7 +218,7 @@ export default function App() {
   }, [state, placeQuery, browsingPlaces])
   useEffect(() => {
     panelRef.current?.querySelector('.panel-main')?.scrollTo({ top: 0 })
-    const heading = document.getElementById('place-heading') ?? document.getElementById('direction-picker') ?? document.getElementById('panel-heading')
+    const heading = document.getElementById('place-heading') ?? document.getElementById('demo-mobile-heading') ?? document.getElementById('panel-heading')
     heading?.focus({ preventScroll: true })
   }, [state.screen, state.routeId, loading])
   useEffect(() => {
@@ -306,7 +311,7 @@ export default function App() {
     setBrowsingPlaces(false)
     navigate({ placeId: undefined, category: undefined, segmentId: savedView?.segmentId ?? state.segmentId })
     setSheetSize(savedView?.size ?? defaultSheetSize({ ...state, placeId: undefined, category: undefined }))
-    if (!savedView) requestAnimationFrame(() => (document.getElementById('direction-picker') ?? document.getElementById('panel-heading'))?.focus({ preventScroll: true }))
+    if (!savedView) requestAnimationFrame(() => (document.getElementById('demo-mobile-heading') ?? document.getElementById('panel-heading'))?.focus({ preventScroll: true }))
   }
   const choosePlace = (place: CatalogPlace) => {
     rememberRouteView()
@@ -363,14 +368,14 @@ export default function App() {
   const placesTitle = placeQuery.trim() ? '搜尋結果' : fieldGroup?.title ?? (state.category ? categoryLabels[state.category] : '校園地點')
   const collapsed = discovering
     ? <div className="sheet-route-summary"><div><strong>{selectedPlace?.name ?? placesTitle}</strong></div><button onClick={() => setSheetSize('half')}>查看資訊</button></div>
-    : state.screen === 'compare' ? <DirectionPicker routes={routes} onOpen={openRoute} />
+    : state.screen === 'compare' ? <DemoRoutePicker routes={routes} onOpen={openRoute} headingId="demo-mobile-heading" />
     : tourRoute && tour.engaged ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} />
     : <div className="sheet-route-summary"><div><strong>{selected?.name ?? '路線'}</strong></div><button onClick={() => setSheetSize('half')}>查看路線</button></div>
 
   return <div className={`app mvp ${campus && mapScreen ? 'map-experience' : ''}`}>
     <a href="#content-panel" className="skip-link" onClick={event => { event.preventDefault(); setSheetSize('full'); requestAnimationFrame(() => document.getElementById('content-panel')?.focus()) }}>跳至主要內容</a>
     <header className="topbar">
-      <button className="brand" onClick={showDirections} aria-label="輪椅友善路徑導航系統，返回路線"><span className="brand-symbol"><RouteIcon size={25} aria-hidden="true" /></span><span><strong>輪椅友善路徑導航系統</strong></span></button>
+      <button className="brand" onClick={showDirections} aria-label="輪椅友善路徑導航系統，返回地圖"><span className="brand-symbol"><RouteIcon size={25} aria-hidden="true" /></span><span><strong>輪椅友善路徑導航系統</strong></span></button>
       <nav className="product-nav" aria-label="主要功能">
         {navItems.map(item => {
           const active = item.screen === 'compare' ? mapScreen : state.screen === item.screen
@@ -379,7 +384,7 @@ export default function App() {
         <button disabled={!campus} onClick={() => openCommunity()} aria-haspopup="dialog"><MessageSquare size={17} aria-hidden="true" /><span>路況</span></button>
       </nav>
     </header>
-    {mapScreen && <p className="route-scope-note"><Info size={16} aria-hidden="true" /><span>總圖與博雅的試走紀錄，部分通行條件尚未確認。</span></p>}
+    {mapScreen && state.screen !== 'compare' && <p className="route-scope-note"><Info size={16} aria-hidden="true" /><span>總圖與博雅的試走紀錄，部分通行條件尚未確認。</span></p>}
 
     {state.screen === 'help' ? <HelpPage onDemo={showDirections} onSources={campus ? () => setShowSources(true) : undefined} />
       : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={routes} onOpen={favorite => navigate(fromHash(favorite.hash))}
@@ -391,7 +396,7 @@ export default function App() {
           : loadError && <><TriangleAlert size={32} /><h1>地圖資料暫時無法載入</h1><button className="button primary" onClick={retryCampus}>重新載入</button></>}
       </main>
       : <main className={`workspace route-workspace ${catalog ? 'has-discovery' : ''}`} data-discovering={discovering} data-has-place={!!selectedPlace} data-sheet={sheetSize} data-screen={state.screen}>
-      <MapSheet label={discovering ? '地點資訊' : state.screen === 'compare' ? '選擇方向' : '路線資訊'} size={sheetSize} onSize={setSheetSize}
+      <MapSheet label={discovering ? '地點資訊' : state.screen === 'compare' ? '示範路線' : '路線資訊'} size={sheetSize} onSize={setSheetSize}
         showControls={state.screen !== 'compare' || discovering || sheetSize !== 'map'} mobile={mobile} panelRef={panelRef} collapsed={collapsed}>
         <div className="panel-main" key={state.screen}>
           {placeFeedback && <p className="place-endpoint-feedback" role="status">{placeFeedback}</p>}
@@ -411,18 +416,11 @@ export default function App() {
 
           <div className="route-panel-content" hidden={discovering}>
             {resolved.problem ? <UnavailableRoute problem={resolved.problem} onCompare={showDirections} onRoute={() => { if (selected) openRoute(selected) }} />
-              : state.screen === 'compare' ? <>
-              <h1 id="panel-heading" tabIndex={-1}>選擇方向</h1>
-              <div className="route-cards direction-cards">{routes.map(route => <button key={route.id} className={`route-card walked-route-card ${route.id === 'walk-back' ? 'direct' : 'gentle'}`} onClick={() => openRoute(route)} aria-label={`查看${route.name}`}>
-                <div className="route-card-top"><span className="route-card-icon"><RouteIcon size={20} aria-hidden="true" /></span>
-                  <div><strong>{route.name}</strong><span>{route.description}</span><small className="walked-route-distance">{walkedDistanceLabel(route)}</small></div>
-                  <ChevronRight className="walked-route-open" size={18} aria-hidden="true" />
-                </div>
-              </button>)}</div>
-            </> : selected && <>
+              : state.screen === 'compare' ? <DemoRoutePicker routes={routes} onOpen={openRoute} headingId="panel-heading" />
+              : selected && <>
               <div className="route-heading">
                 <div className="route-heading-tools">
-                  <button className="back-link" onClick={state.screen === 'confirm' ? () => openRoute(selected, state.segmentId) : showDirections}><ArrowLeft size={17} aria-hidden="true" />{state.screen === 'confirm' ? '返回路線' : '更換方向'}</button>
+                  <button className="back-link" onClick={state.screen === 'confirm' ? () => openRoute(selected, state.segmentId) : showDirections}><ArrowLeft size={17} aria-hidden="true" />{state.screen === 'confirm' ? '返回路線' : '全部示範路線'}</button>
                   <p className="route-distance">{walkedDistanceLabel(selected)}</p>
                 </div>
                 <h1 id="panel-heading" tabIndex={-1}>{state.screen === 'confirm' ? '分享路線' : selected.name}</h1>

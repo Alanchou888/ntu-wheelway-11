@@ -34,7 +34,7 @@ export function SavedRoutes({ favorites, allRoutes, onOpen, onRemove, onUndo, ca
         const route = allRoutes.find(item => item.id === fromHash(favorite.hash).routeId)
         return <li key={favorite.key}>
           <div className="favorite-heading"><Bookmark size={21} aria-hidden="true" /><h2>{route?.name ?? favorite.name}</h2></div>
-          {route ? <p>{route.originEntrance.name} → {route.destinationEntrance.name}</p> : <p className="favorite-unavailable">這是舊版路線，請從地圖重新選擇方向。</p>}
+          {route ? <p>{route.originEntrance.name} → {route.destinationEntrance.name}</p> : <p className="favorite-unavailable">這是舊版路線，請從地圖的示範路線重新選擇。</p>}
           <div className="favorite-actions">
             {route && <button className="button primary" onClick={() => onOpen(favorite)}>開啟路線<ArrowRight size={16} aria-hidden="true" /></button>}
             <button className="button plain" onClick={() => onRemove(favorite.key)} aria-label={`移除收藏，${favorite.name}`}><Trash2 size={16} aria-hidden="true" />移除收藏</button>
@@ -50,7 +50,7 @@ export function HelpPage({ onDemo, onSources }: { onDemo: () => void; onSources?
     <div className="standalone-inner help-inner">
       <h1 id="panel-heading" tabIndex={-1}>使用指南</h1>
       <ol className="help-steps mvp-help-steps">
-        <li><strong>選擇方向</strong><p>去程從總圖前廣場到博雅西側，回程由博雅西側回到總圖。</p></li>
+        <li><strong>打開示範路線</strong><p>去程從總圖前廣場到博雅西側，回程由博雅西側回到總圖。</p></li>
         <li><strong>查看沿途注意</strong><p>從路線或地圖點開坡道、路面和狹窄處，看試走觀察、照片與量測。</p></li>
         <li><strong>查找附近設施</strong><p>可搜尋地點，或從「更多設施」查飲水、廁所等資訊。</p></li>
       </ol>
@@ -74,6 +74,6 @@ export function UnavailableRoute({ problem, onCompare, onRoute }: { problem: 'ro
   return <div className="empty-state unavailable-route"><Info size={35} aria-hidden="true" />
     <h1 id="panel-heading" tabIndex={-1}>{problem === 'route' ? '找不到這條路線' : '找不到這個路段'}</h1>
     {problem === 'segment' && <button className="button primary wide" onClick={onRoute}>查看整條路線</button>}
-    <button className="button secondary wide" onClick={onCompare}>選擇方向</button>
+    <button className="button secondary wide" onClick={onCompare}>查看示範路線</button>
   </div>
 }
