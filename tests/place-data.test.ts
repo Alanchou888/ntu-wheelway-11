@@ -2,7 +2,7 @@ import{mkdtemp,readFile,writeFile,rm}from'node:fs/promises'
 import{tmpdir}from'node:os'
 import{join}from'node:path'
 import{describe,it,expect}from'vitest'
-import{buildPlaceCatalog,normalizeAmenities,refreshPlaces,validatePlaceCatalog}from'../scripts/refresh-places.mjs'
+import{buildPlaceCatalog,normalizeAmenities,OSM_MAP_ENDPOINT,refreshPlaces,validatePlaceCatalog}from'../scripts/refresh-places.mjs'
 const campus=JSON.parse(await readFile('public/data/campus.json','utf8'))
 describe('place data snapshots',()=>{
   it('maps only explicit public amenity tags and keeps unknowns',()=>{
@@ -51,5 +51,25 @@ describe('place data snapshots',()=>{
       const result=await refreshPlaces({outputPath:path,fetchImpl:async()=>{calls++;if(calls===1)return{ok:false,status:502};return{ok:true,json:async()=>({elements:[]})}}})
       expect(calls).toBe(2);expect(result.snapshot.amenitiesStatus).toBe('ok');expect(result.snapshot.sources.find(s=>s.id==='osm-amenities').url).toBe('https://overpass.private.coffee/api/interpreter')
     }finally{await rm(dir,{recursive:true,force:true})}
+  })
+  it('uses a bounded OSM map snapshot if neither Overpass endpoint is available', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'wheelway-map-'))
+    try {
+      const { snapshot } = await refreshPlaces({
+        outputPath: join(dir, 'places.json'),
+        fetchImpl: async url => url === OSM_MAP_ENDPOINT ? {
+          ok: true, json: async () => ({ elements: [
+            { type: 'node', id: 1, lon: 121.537, lat: 25.018 },
+            { type: 'node', id: 2, lon: 121.538, lat: 25.018 },
+            { type: 'way', id: 3, nodes: [1, 2], tags: { highway: 'elevator', 'level:ref': '1F' } },
+          ] }),
+        } : { ok: false, status: 429 },
+      })
+      expect(snapshot.amenitiesStatus).toBe('ok')
+      expect(snapshot.places.find(place => place.id === 'osm-way-3')).toMatchObject({
+        category: 'elevator', coordinate: [121.5375, 25.018], level: '1F',
+        verifiedAt: null, wheelchair: null,
+      })
+    } finally { await rm(dir, { recursive: true, force: true }) }
   })
 })

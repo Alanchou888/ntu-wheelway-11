@@ -107,7 +107,7 @@ export function PlaceList({catalog,results,category,title,onChoose,onBack,loadin
           {field ? <FieldSymbol kind={field.kind} /> : <span className={`place-category-icon ${place.category}`}><PlaceIcon category={place.category} size={22}/></span>}
           <span className="place-result-text"><strong>{place.name}</strong>
             {field ? <FieldSummary point={field} /> : <>
-              <small>{categoryLabels[place.category]} · 公開圖資</small>
+              <small>{categoryLabels[place.category]} · 公開圖資{place.level ? ` · 樓層標記 ${place.level}` : ''}{['yes','designated'].includes(place.wheelchair ?? '') ? ' · 圖資標為輪椅可用' : ''}</small>
               {reference&&<small>距總圖中心直線 {formatDistance(distance(reference.coordinate,place.coordinate))}</small>}
             </>}
           </span><ChevronRight size={16} aria-hidden="true"/>
@@ -193,7 +193,7 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
       {place.address&&<div><dt>地址</dt><dd>{place.address}</dd></div>}
       <div><dt>開放時間</dt><dd>{place.openingHours??'暫無資料'}</dd></div>
       <div><dt>輪椅資訊</dt><dd>{wheelchair}</dd></div>
-      {place.level&&<div><dt>樓層</dt><dd>{place.level}</dd></div>}
+      {place.level&&<div><dt>{place.sourceId === 'osm-amenities' ? '樓層標記' : '樓層'}</dt><dd>{place.level}</dd></div>}
       {place.widthM!==null&&<div><dt>圖資路寬</dt><dd>{place.widthM} 公尺</dd></div>}
       {place.slopePercent!==null&&<div><dt>圖資坡度</dt><dd>{place.slopePercent}%</dd></div>}
     </dl>

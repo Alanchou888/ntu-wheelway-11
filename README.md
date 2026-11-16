@@ -76,7 +76,7 @@ npm.cmd run preview
 
 團隊可執行 `npm.cmd run team`，從 `http://127.0.0.1:5173/team` 編輯本機草稿或下載空白範本。
 
-`npm.cmd run places:refresh` 更新周邊設施快照，失敗時保留上一版。`npm.cmd run places:refresh -- --offline` 只驗證現有快照，不連線。搜尋與地點分類使用同站 `data/places.json`，瀏覽者不會直接呼叫 Overpass。最近查看只保存目前瀏覽器內最多 8 個公開地點 ID，可從搜尋建議清除。
+`npm.cmd run places:refresh` 更新周邊設施快照。Overpass 暫時無法取得時，可用總圖與博雅周邊的小範圍 OpenStreetMap 地圖資料更新。若原有較大範圍的快照，則保留上一版。`npm.cmd run places:refresh -- --offline` 只驗證現有快照，不連線。搜尋與地點分類使用同站 `data/places.json`。樓層與輪椅可用性依來源標記顯示。最近查看只保存目前瀏覽器內最多 8 個公開地點 ID，可從搜尋建議清除。
 
 ## 資料範圍
 

@@ -19,17 +19,20 @@ describe('campus place search and endpoints',()=>{
     expect(findPlaces(catalog.places,'','ramp')).toHaveLength(18)
     expect(findPlaces(catalog.places,'','building').every(p=>p.category==='building')).toBe(true)
     expect(findPlaces(catalog.places,'this location does not exist')).toEqual([])
-    expect(findPlaces(catalog.places,'','toilet')).toEqual([])
+    for (const category of ['toilet', 'elevator', 'water', 'rest'] as const) {
+      const places = findPlaces(catalog.places, '', category)
+      expect(places.length).toBeGreaterThan(0)
+      expect(places.every(place => place.sourceId === 'osm-amenities' && place.verifiedAt === null)).toBe(true)
+    }
   })
   it('includes documented ramps and the restroom entrance in facility results', () => {
     const { places } = withFieldObservations(catalog)
-    expect(findPlaces(places, '', 'toilet')).toMatchObject([{ id: 'field-boya-restroom', category: 'field', wheelchair: null }])
+    expect(findPlaces(places, '', 'toilet')).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'field-boya-restroom', category: 'field', wheelchair: null })]))
     expect(findPlaces(places, '', 'ramp').filter(place => place.category === 'field').map(place => place.id)).toEqual(
       expect.arrayContaining(['field-library-ramp', 'field-boya-ramp', 'field-boya-indoor-ramp']),
     )
     expect(findPlaces(places, '', 'field').some(place => place.id === 'field-boya-restroom')).toBe(true)
     expect(findPlaces(places, '', 'ramp').some(place => place.id === 'field-boya-west-ramp')).toBe(true)
-    expect(findPlaces(places, '', 'water')).toEqual([])
   })
   it('keeps the two routable buildings first without inferring other entrances',()=>{
     expect(findPlaces(catalog.places).slice(0,2).map(p=>p.id)).toEqual(['library','boya'])

@@ -7,10 +7,11 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..')
 export const placesPath=resolve(root,'public/data/places.json')
 export const OVERPASS_ENDPOINT='https://overpass-api.de/api/interpreter'
 export const OVERPASS_MIRROR='https://overpass.private.coffee/api/interpreter'
+export const OSM_MAP_ENDPOINT='https://api.openstreetmap.org/api/0.6/map.json?bbox=121.535,25.0165,121.5417,25.0205'
 const box=[FACILITY_BBOX[1],FACILITY_BBOX[0],FACILITY_BBOX[3],FACILITY_BBOX[2]].join(',')
 export const AMENITY_QUERY=`[out:json][timeout:25];(nwr(${box})[amenity~"^(toilets|drinking_water|bench|shelter)$"];nwr(${box})[highway=elevator];);out center tags;`
 const kinds={toilets:'toilet',drinking_water:'water',bench:'rest',shelter:'rest'}
-const labels={toilet:'公共廁所',water:'飲水點',rest:'休息設施',elevator:'電梯'}
+const labels={toilet:'廁所',water:'飲水點',rest:'休息設施',elevator:'電梯'}
 const common={address:null,openingHours:null,wheelchair:null,level:null,indoor:null,widthM:null,slopePercent:null,routePlaceId:null,contextId:null,verifiedAt:null,photos:[]}
 const text=value=>typeof value==='string'&&value.trim()?value.trim().slice(0,300):null
 const aliases=tags=>[...new Set(['name:en','name:zh','alt_name','short_name'].flatMap(key=>(text(tags[key])??'').split(';')).filter(Boolean))]
@@ -28,9 +29,23 @@ export function normalizeAmenities(payload){
     const sourceId=`${row.type}/${row.id}`
     if(!category||!['node','way','relation'].includes(row.type)||!/^\d+$/.test(String(row.id))||!inBbox(coordinate,FACILITY_BBOX)||ids.has(sourceId)||['private','no'].includes(tags.access)||tags.disused==='yes'||tags.abandoned==='yes')continue
     ids.add(sourceId)
-    places.push({...common,id:`osm-${row.type}-${row.id}`,name:text(tags['name:zh'])??text(tags.name)??`${labels[category]} ${String(row.id).slice(-4)}`,aliases:aliases(tags),category,coordinate,sourceId:'osm-amenities',sourceUrl:`https://www.openstreetmap.org/${sourceId}`,address:text(tags['addr:full'])??text([tags['addr:street'],tags['addr:housenumber']].filter(Boolean).join('')),openingHours:text(tags.opening_hours),wheelchair:text(tags.wheelchair),level:text(tags.level),indoor:text(tags.indoor),note:'公開設施點位，尚未由團隊實地查核。'})
+    const label = tags.amenity === 'bench' ? '座椅' : tags.amenity === 'shelter' ? '遮蔽處' : labels[category]
+    const note = tags.access === 'customers' ? '公開圖資標記為供顧客使用。' : tags.access === 'permit' ? '公開圖資標記為須取得許可。' : '公開設施點位，尚未由團隊實地查核。'
+    places.push({...common,id:`osm-${row.type}-${row.id}`,name:text(tags['name:zh'])??text(tags.name)??label,aliases:aliases(tags),category,coordinate,sourceId:'osm-amenities',sourceUrl:`https://www.openstreetmap.org/${sourceId}`,address:text(tags['addr:full'])??text([tags['addr:street'],tags['addr:housenumber']].filter(Boolean).join('')),openingHours:text(tags.opening_hours),wheelchair:text(tags.wheelchair),level:text(tags['level:ref'])??text(tags.level),indoor:text(tags.indoor),note})
   }
   return places.sort((a,b)=>a.id.localeCompare(b.id))
+}
+function normalizeMapAmenities(payload){
+  if(!Array.isArray(payload?.elements)||payload.remark)throw new Error('Incomplete OSM map response')
+  const nodes=new Map(payload.elements.filter(row=>row.type==='node').map(row=>[row.id,[row.lon,row.lat]]))
+  const elements=payload.elements.filter(row=>row.tags).map(row=>{
+    if(row.type!=='way'||!row.nodes?.length)return row
+    const points=row.nodes.map(id=>nodes.get(id))
+    if(!points.every(validCoordinate))return row
+    const [lon,lat]=representative({type:'Polygon',coordinates:[points]})
+    return {...row,center:{lon,lat}}
+  })
+  return normalizeAmenities({elements})
 }
 export function buildPlaceCatalog(campus,amenities=[],amenitySource=null){
   const sourceById=Object.fromEntries(campus.sources.map(source=>[source.id,source]))
@@ -72,8 +87,15 @@ export async function refreshPlaces({outputPath=placesPath,campusPath=resolve(ro
         amenities=normalizeAmenities(await response.json());endpoint=url;break
       }catch(error){lastError=error}
     }
-    if(!amenities)throw lastError
-    source={id:'osm-amenities',label:'OpenStreetMap 周邊公共設施',url:endpoint,retrievedAt:now.toISOString(),status:'ok',note:'固定校園範圍的 Overpass 快照。公開標記不等同實地查核，空白類別不代表現場沒有設施。'}
+    if(!amenities){
+      const previousSource=previous?.sources.find(s=>s.id==='osm-amenities')
+      if(previousSource&&previousSource.url!==OSM_MAP_ENDPOINT)throw lastError
+      const response=await fetchImpl(OSM_MAP_ENDPOINT,{signal:AbortSignal.timeout(15_000),headers:{'User-Agent':'NTU-Wheelway/2.5 (bounded campus snapshot)'}})
+      if(!response.ok)throw new Error(`HTTP ${response.status}`)
+      amenities=normalizeMapAmenities(await response.json())
+      endpoint=OSM_MAP_ENDPOINT
+    }
+    source={id:'osm-amenities',label:'OpenStreetMap 周邊設施',url:endpoint,retrievedAt:now.toISOString(),status:'ok',note:'固定校園範圍的公開圖資快照。設施樓層、使用限制和輪椅資訊以來源標記為準。'}
   }catch(error){
     const oldSource=previous?.sources.find(s=>s.id==='osm-amenities')
     if(!oldSource){
