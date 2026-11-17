@@ -1,7 +1,7 @@
 import { toHash } from './routes'
 import type { NavigationState } from './types'
 
-/** Keep legacy links usable while limiting public navigation to the two walked routes. */
+/** Keep legacy route links usable and the team editor out of public navigation. */
 export function publicNavigation(state: NavigationState): NavigationState {
   const screen = state.screen === 'setup' || state.screen === 'editor' ? 'compare' : state.screen
   const origin = state.routeId === 'walk-out' ? 'library' : state.routeId === 'walk-back' ? 'boya' : state.origin

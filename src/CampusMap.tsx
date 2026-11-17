@@ -15,6 +15,8 @@ import { reportMatchesSegment, slopeStyle } from './road-conditions'
 import { mapThemes, ThemeChooser, ThemeLegend } from './MapThemes'
 import { groupFieldMarkers } from './field-marker-groups'
 import { fieldKinds, fieldObservation } from './field-observations'
+import { drawPlannerMap } from './planner-map'
+import type { PlannerMapOverlay } from './planner-map'
 
 interface Props {
   campus: Campus; routes: Route[]; selectedId: string; segmentId: string; mode: Mode; screen: Screen
@@ -30,6 +32,9 @@ interface Props {
   fieldGroupIds?: string[]; onSelectFieldGroup?: (ids: string[]) => void
   mapTheme?:MapTheme;onThemeChange?:(theme:MapTheme)=>void
   communityFocus?:{coordinate:Coordinate;request:number}
+  planner?: PlannerMapOverlay
+  plannerPickError?: string
+  onCancelPlannerPick?: () => void
 }
 const latlng = (p: Coordinate): L.LatLngTuple => [p[1], p[0]]
 const fieldGroupIncludes = (place: CatalogPlace, ids?: string[]) => !ids || ids.includes(place.id)
@@ -83,7 +88,11 @@ export default function CampusMap(props: Props) {
   const hideRouteLines = props.discoveryActive && !(showWalkedPoints && viewingFieldPoints)
   const geometryKey = useMemo(() => JSON.stringify(props.routes.map(routeCoordinates)), [props.routes])
   const overviewRouteId = ['detail', 'confirm', 'editor'].includes(props.screen) ? props.selectedId : ''
-  const fitKey = `${theme}|${overviewRouteId}|${geometryKey}`
+  const plannerPicking = props.planner?.picking
+  const plannerFitKey = props.planner
+    ? `plan|${props.planner.selectedId ?? ''}|${props.planner.plan.start?.coordinate ?? ''}|${props.planner.plan.end?.coordinate ?? ''}`
+    : ''
+  const fitKey = plannerFitKey || `${theme}|${overviewRouteId}|${geometryKey}`
 
   const visiblePadding = () => {
     const rect = rootRef.current!.getBoundingClientRect()
@@ -131,7 +140,9 @@ export default function CampusMap(props: Props) {
       if(points.length&&padding.usable){map.fitBounds(L.latLngBounds(points.map(place=>latlng(place.coordinate))),{paddingTopLeft:padding.topLeft,paddingBottomRight:padding.bottomRight,maxZoom:18,animate:false});return}
     }
     const route = ['detail', 'confirm', 'editor'].includes(current.screen) ? current.routes.find(item => item.id === current.selectedId) : undefined
-    const points = route ? routeCoordinates(route) : current.routes.flatMap(routeCoordinates)
+    const planned = current.planner?.routes.find(candidate => candidate.id === current.planner?.selectedId)
+    const pins = [current.planner?.plan.start, current.planner?.plan.end].flatMap(endpoint => endpoint ? [endpoint.coordinate] : [])
+    const points = planned ? [...planned.coordinates, ...pins] : pins.length ? pins : route ? routeCoordinates(route) : current.routes.flatMap(routeCoordinates)
     const padding = visiblePadding()
     const options = padding.usable ? { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight } : { padding: [35, 40] as L.PointTuple }
     if (points.length) map.fitBounds(L.latLngBounds(points.map(latlng)), { ...options, maxZoom: 18, animate: false })
@@ -148,7 +159,9 @@ export default function CampusMap(props: Props) {
     map.on('moveend',()=>setViewRevision(value=>value+1))
     map.on('dragstart', () => {locationActions.current.session.setFollowing(false);actions.current.onMapDrag?.()})
     map.on('click', (event: L.LeafletMouseEvent) => {
-      if (actions.current.pickingEntrance) actions.current.onPickEntrance?.([event.latlng.lng, event.latlng.lat])
+      const point: Coordinate = [event.latlng.lng, event.latlng.lat]
+      if (actions.current.planner?.picking) actions.current.planner.onPick(point)
+      else if (actions.current.pickingEntrance) actions.current.onPickEntrance?.(point)
     })
     L.control.zoom({ position: 'bottomright' }).addTo(map)
     map.attributionControl.setPrefix(false)
@@ -199,6 +212,14 @@ export default function CampusMap(props: Props) {
     const group = routesRef.current
     if (!group) return
     group.clearLayers()
+    if (actions.current.planner) {
+      drawPlannerMap(group, {
+        ...actions.current.planner,
+        onLeg: id => actions.current.planner?.onLeg(id),
+        onRoute: id => actions.current.planner?.onRoute(id),
+      })
+      return
+    }
     if(hideRouteLines)return
     const focus = props.screen === 'detail' || props.screen === 'confirm'
     const selected = props.routes.find(r => r.id === props.selectedId) ?? props.routes[0]
@@ -279,7 +300,9 @@ export default function CampusMap(props: Props) {
         L.circleMarker(latlng(place.coordinate), { radius: 7, color: '#fff', weight: 2, fillColor: '#6d8277', fillOpacity: 1 }).bindTooltip(label, { permanent: true, direction: 'top', className: 'entrance-label' }).addTo(group)
       })
     }
-  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus,hideRouteLines,theme,props.communityReports,props.communitySegments])
+  }, [props.routes, props.selectedId, props.segmentId, props.mode, props.screen, props.campus,hideRouteLines,theme,
+    props.communityReports,props.communitySegments,props.planner?.routes,props.planner?.plan,props.planner?.access,
+    props.planner?.selectedId,props.planner?.legId,props.planner?.observation,plannerPicking])
 
   useEffect(() => {
     const group = facilitiesRef.current
@@ -300,7 +323,7 @@ export default function CampusMap(props: Props) {
     const group=buildingClicksRef.current
     if(!group)return
     group.clearLayers()
-    if(!props.catalogPlaces||!props.campus.context)return
+    if(!props.catalogPlaces||!props.campus.context||plannerPicking)return
     const placeFor=(feature:GeoJSON.Feature)=>props.catalogPlaces?.find(p=>p.contextId===String(feature.id)||p.routePlaceId&&(p.name===feature.properties?.name||p.aliases.includes(feature.properties?.name)))
     L.geoJSON(props.campus.context,{
       filter:feature=>!!placeFor(feature),
@@ -310,14 +333,14 @@ export default function CampusMap(props: Props) {
         if(place)layer.on('click',(event:L.LeafletMouseEvent)=>{L.DomEvent.stopPropagation(event);actions.current.onSelectPlace?.(place.id)})
       },
     }).addTo(group)
-  },[props.catalogPlaces,props.campus])
+  },[props.catalogPlaces,props.campus,plannerPicking])
 
   useEffect(()=>{
     const group=placesRef.current
     const map=mapRef.current
     if(!group||!map)return
     group.clearLayers()
-    if(!props.catalogPlaces || props.mapObscured || !rootRef.current)return
+    if(!props.catalogPlaces || props.mapObscured || !rootRef.current || plannerPicking)return
     // Keep markers behind the search or sheet out of the tab order and hit testing.
     const canvas = rootRef.current.getBoundingClientRect()
     const workspace = rootRef.current.closest('.route-workspace')
@@ -412,7 +435,7 @@ export default function CampusMap(props: Props) {
       target?.setAttribute('role', 'button')
       if(target)L.DomEvent.on(target,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key==='Enter'||key===' '){L.DomEvent.stop(event);actions.current.onSelectPlace?.(place.id)}})
     }
-  },[props.catalogPlaces,props.catalogCategory,props.catalogQuery,props.selectedPlaceId,props.campus,props.routes,props.layoutKey,props.mapObscured,overviewRouteId,catalogMatches,showFacilities,showWalkedPoints,layersOpen,theme,zoom,viewRevision])
+  },[props.catalogPlaces,props.catalogCategory,props.catalogQuery,props.selectedPlaceId,props.campus,props.routes,props.layoutKey,props.mapObscured,overviewRouteId,catalogMatches,showFacilities,showWalkedPoints,layersOpen,theme,zoom,viewRevision,plannerPicking])
 
   useEffect(()=>{
     if(!props.discoveryActive)return
@@ -425,7 +448,7 @@ export default function CampusMap(props: Props) {
     const group=communityRef.current
     if(!group)return
     group.clearLayers()
-    if(theme!=='conditions'&&(theme!=='routes'||!showCommunity))return
+    if(plannerPicking || theme!=='conditions'&&(theme!=='routes'||!showCommunity))return
     for(const segment of props.communitySegments??[]){
       const reports=(props.communityReports??[]).filter(r=>r.segmentId===segment.id&&!r.coordinate)
       if(!reports.length)continue
@@ -450,7 +473,7 @@ export default function CampusMap(props: Props) {
       const element=marker.getElement();element?.setAttribute('aria-label',title);element?.setAttribute('role','button')
       if(element)L.DomEvent.on(element,'keydown',event=>{const key=(event as KeyboardEvent).key;if(key===' '||key==='Enter'){L.DomEvent.stop(event);actions.current.onSelectCommunity?.(report.segmentId)}})
     }
-  },[props.communityReports,props.communitySegments,showCommunity,props.campus,theme])
+  },[props.communityReports,props.communitySegments,showCommunity,props.campus,theme,plannerPicking])
 
   useEffect(()=>{
     if(!props.communityFocus)return
@@ -467,14 +490,14 @@ export default function CampusMap(props: Props) {
   },[props.communityFocus,props.layoutKey,props.screen,device.session])
 
   useEffect(() => {
-    if (props.discoveryActive || fittedView.current === fitKey || (theme === 'facilities' && !props.catalogPlaces)) return
+    if (props.discoveryActive || plannerPicking || fittedView.current === fitKey || (theme === 'facilities' && !props.catalogPlaces)) return
     const timer = window.setTimeout(() => {
       fittedView.current = fitKey
       device.session.setFollowing(false)
       fitRoutes()
     }, 220)
     return () => clearTimeout(timer)
-  }, [fitKey, theme, props.catalogPlaces, props.campus, props.discoveryActive, device.session])
+  }, [fitKey, theme, props.catalogPlaces, props.campus, props.discoveryActive, device.session, plannerPicking])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -539,9 +562,25 @@ export default function CampusMap(props: Props) {
   },[device.state,props.campus,props.layoutKey,props.preview?.playing,props.preview?.following])
 
   return <section className="map-shell" aria-label="臺大校園路線地圖" inert={props.mapObscured}>
-    <div className={`map-canvas ${props.pickingEntrance ? 'picking-entrance' : ''}`} ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />
+    <div className={`map-canvas ${props.pickingEntrance ? 'picking-entrance' : ''} ${plannerPicking ? 'planner-picking' : ''}`} ref={rootRef} role="group" aria-label="校園地圖，所有路線與路段亦可使用旁邊的清單操作" />
     {props.pickingEntrance && <div className="map-pick-note" role="status">點選入口位置，座標會填入目前草稿</div>}
-    <div className="map-title-pill"><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖書館與博雅教學館</span></div>
+    {plannerPicking && <div className="planner-pick-note">
+      <p role="status">請在地圖上選{plannerPicking === 'start' ? '起點 A' : plannerPicking === 'end' ? '終點 B' : '實勘位置'}</p>
+      <button type="button" className="button secondary" onClick={() => {
+        const map = mapRef.current
+        const pad = visiblePadding()
+        const size = map?.getSize()
+        if (!map || !size) return
+        const point = pad.usable ? map.containerPointToLatLng([
+          (size.x + pad.topLeft[0] - pad.bottomRight[0]) / 2,
+          (size.y + pad.topLeft[1] - pad.bottomRight[1]) / 2,
+        ]) : map.getCenter()
+        props.planner?.onPick([point.lng, point.lat])
+      }}>使用畫面中央</button>
+      <button type="button" className="button plain" onClick={props.onCancelPlannerPick}>取消選點</button>
+      {props.plannerPickError && <p className="planner-pick-error" role="alert">{props.plannerPickError}</p>}
+    </div>}
+    {!props.planner && <div className="map-title-pill"><span>臺大公館校區</span><span className="map-title-divider" /><span className="muted">總圖書館與博雅教學館</span></div>}
     <div className="map-actions">
       <button ref={layerButton} className={`map-tool map-theme-tool ${layersOpen ? 'active' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-label="地圖圖例與圖層" aria-expanded={layersOpen} title="圖例與圖層"><Layers3 size={20} aria-hidden="true" /><span>{showWalkedPoints ? '圖例' : (mapThemes.find(t=>t.id===theme)?.label ?? '圖層')}</span></button>
       <button className="map-tool" onClick={()=>{device.session.setFollowing(false);if(props.discoveryActive)props.onReturnRoutes?.();fitRoutes()}} aria-label="回到完整路線" title="回到完整路線"><Scan size={20} aria-hidden="true" /></button>
@@ -553,6 +592,12 @@ export default function CampusMap(props: Props) {
     </div>
     {layersOpen && !props.mapObscured && createPortal(<div className="layer-popover" ref={layerPanel}>
       <div className="layer-title">圖例與圖層<button className="icon-button" onClick={() => { setLayersOpen(false); layerButton.current?.focus() }} aria-label="關閉圖例與圖層"><X size={17} aria-hidden="true" /></button></div>
+      {props.planner && <ul className="planner-layer-key" aria-label="規劃路線圖例">
+        <li><i className="legend-line planned" />規劃路線</li>
+        <li><i className="legend-line alt" />替代路線</li>
+        <li><i className="legend-line overlap" />試走線重疊處</li>
+        <li><i className="legend-line caution" />回報／選中路段</li>
+      </ul>}
       {showWalkedPoints && <div className="field-map-key">
         <ul className="field-legend" aria-label="實勘點圖例">{Object.entries(fieldKinds).map(([kind, item]) =>
           <li key={kind}><span className={`field-symbol field-kind-${kind}`} aria-hidden="true">{item.symbol}</span>{item.label}</li>
@@ -566,8 +611,9 @@ export default function CampusMap(props: Props) {
       <p>公開點位尚未實地查核。</p>
     </div>,rootRef.current?.closest('.route-workspace')??document.body)}
     {(baseError || (showCampus && campusError)) && <div className="map-network-note" role="status"><CloudOff size={15} />{baseError ? '底圖暫時無法載入，仍可查看動線與清單。' : '校園圖層暫時無法載入，仍可使用底圖與動線。'}</div>}
-    <div className={`map-legend ${theme!=='routes'?'theme-legend':''}`} aria-live="polite">
-      {theme!=='routes'?<ThemeLegend theme={theme} simulatedSlopes={simulatedSlopes}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />去程</span><span><i className="legend-line direct" />回程</span>{showWalkedPoints && <span>博雅館內走向約略</span>}</> : <span><MapPin size={15} />已查核動線</span>}
+    <div className={`map-legend ${props.planner ? 'planner-map-key' : theme!=='routes'?'theme-legend':''}`} aria-live="polite">
+      {props.planner ? <><span><i className="legend-line planned" />規劃路線</span><span><i className="legend-line alt" />替代路線</span><span><i className="legend-line overlap" />試走線重疊處</span><span><i className="legend-line caution" />回報／選中路段</span></>
+        : theme!=='routes'?<ThemeLegend theme={theme} simulatedSlopes={simulatedSlopes}/>:props.screen === 'editor' ? <span><MapPin size={15} />實勘草稿，尚未發布</span> : props.mode === 'demo' ? <><span><i className="legend-line gentle" />去程</span><span><i className="legend-line direct" />回程</span>{showWalkedPoints && <span>博雅館內走向約略</span>}</> : <span><MapPin size={15} />已查核動線</span>}
     </div>
     <div className="map-north" aria-hidden="true"><span>↑</span>N</div>
   </section>

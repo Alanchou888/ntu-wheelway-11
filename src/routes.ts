@@ -1,4 +1,5 @@
 import type { Campus, CatalogCategory, Coordinate, Entrance, Mode, NavigationState, Preference, Route, RouteMetrics, Segment } from './types'
+import { initialPlan, readPlanParams, writePlanParams } from './planning-params'
 
 export const placeNames = { library: '總圖書館', boya: '博雅教學館' }
 export const initialState: NavigationState = { screen: 'setup', mode: 'demo', origin: 'library', wheelchair: 'manual', preference: 'gentle', routeId: '', segmentId: '' }
@@ -150,6 +151,7 @@ export function toHash(state: NavigationState): string {
   if (state.category) params.set('category',state.category)
   if (state.avoidReports) params.set('avoidReports', '1')
   if (state.mapTheme) params.set('theme', state.mapTheme)
+  if (state.screen === 'plan') writePlanParams(params, state.plan ?? initialPlan, state.planChoice)
   return `#${params}`
 }
 export function fromHash(hash: string): NavigationState {
@@ -160,7 +162,7 @@ export function fromHash(hash: string): NavigationState {
     const raw = p.get(key), n = Number(raw)
     if (raw !== null && raw.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= (key === 'recheckDays' ? 3650 : 1000) && (key !== 'recheckDays' || Number.isInteger(n))) limits[key] = n
   }
-  return { screen: ['setup', 'compare', 'detail', 'confirm', 'editor', 'saved', 'help'].includes(screen ?? '') ? screen as NavigationState['screen'] : 'setup',
+  return { screen: ['setup', 'compare', 'detail', 'confirm', 'editor', 'saved', 'help', 'plan'].includes(screen ?? '') ? screen as NavigationState['screen'] : 'setup',
     mode: p.get('mode') === 'survey' ? 'survey' : 'demo', origin: p.get('from') === 'boya' ? 'boya' : 'library',
     wheelchair: p.get('chair') === 'electric' ? 'electric' : 'manual', preference: p.get('prefer') === 'short' ? 'short' : 'gentle',
     routeId: (p.get('route') ?? '').slice(0, 120), segmentId: (p.get('segment') ?? '').slice(0, 120),
@@ -168,7 +170,8 @@ export function fromHash(hash: string): NavigationState {
     ...(['routes', 'conditions', 'slope', 'facilities'].includes(p.get('theme') ?? '') ? { mapTheme: p.get('theme') as NavigationState['mapTheme'] } : {}),
     ...(/^[\w/-]{1,120}$/.test(p.get('place')??'')?{placeId:p.get('place')!}:{}),
     ...(['building','toilet','elevator','water','rest','ramp','landmark','field'].includes(p.get('category')??'')?{category:p.get('category') as CatalogCategory}:{}),
-    ...(Object.values(limits).some(v => v !== null) ? { limits } : {}) }
+    ...(Object.values(limits).some(v => v !== null) ? { limits } : {}),
+    ...(screen === 'plan' ? readPlanParams(p) : {}) }
 }
 
 export function isCampus(value: unknown): value is Campus {

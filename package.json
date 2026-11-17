@@ -12,6 +12,7 @@
     "test": "vitest run",
     "data:refresh": "node scripts/refresh-data.mjs",
     "places:refresh": "node scripts/refresh-places.mjs",
+    "routes:refresh": "node scripts/refresh-routing.mjs",
     "survey:template": "node scripts/create-survey-template.mjs",
     "survey:check": "tsx scripts/review-survey.ts",
     "dev:api": "node scripts/dev-community.mjs",
@@ -23,6 +24,8 @@
     "drizzle-orm": "^0.45.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",
+    "ngraph.graph": "^20.1.2",
+    "ngraph.path": "^1.6.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

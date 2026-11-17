@@ -2,7 +2,7 @@
   "id": "/",
   "name": "輪椅友善路徑導航系統",
   "short_name": "輪椅友善路徑導航系統",
-  "description": "查看臺大總圖與博雅的試走路線、沿途通行狀況與實勘照片。",
+  "description": "規劃臺大與周邊路線，查看沿途路況、試走紀錄和實勘照片。",
   "lang": "zh-Hant-TW",
   "start_url": "/",
   "scope": "/",

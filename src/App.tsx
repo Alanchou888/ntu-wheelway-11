@@ -24,6 +24,15 @@ import { CatalogStatus, FieldSummary, FieldSymbol, PlaceCard, PlaceList, PlaceSe
 import { BoyaFloorPlan, boyaFloorPointIds } from './BoyaFloorPlan'
 import { fieldObservation } from './field-observations'
 import type { FieldObservation } from './field-observations'
+import PlannerPanel from './PlannerPanel'
+import PlannerDraftDialog from './PlannerDraftDialog'
+import { initialPlan, planEndpoint } from './planning-params'
+import type { EndpointSlot, PlanEndpoint, PlanRequest } from './planning-params'
+import { planRoutes, reportSummary, surfaceLabel } from './routing-plan'
+import type { PlannedRoute } from './routing-plan'
+import type { TourRoute } from './route-tour'
+import { useRoutingNetwork } from './useRoutingNetwork'
+import { conditionDataReady, validateReportPoint } from './road-conditions'
 import './product.css'
 import './campus-design.css'
 import './route-experience.css'
@@ -35,17 +44,20 @@ const navItems = [
   { screen: 'saved', label: '收藏', icon: Bookmark },
   { screen: 'help', label: '說明', icon: BookOpen },
 ] as const
+const emptyPlans: PlannedRoute[] = []
 
 function defaultSheetSize(state: NavigationState): SheetSize {
   if (!state.placeId && state.category === 'field') return 'full'
   return state.screen === 'compare' && !state.placeId && !state.category ? 'map' : 'half'
 }
 
-function DemoRoutePicker({ routes, onOpen, headingId }: { routes: Route[]; onOpen: (route: Route) => void; headingId: string }) {
+function DemoRoutePicker({ routes, onOpen, headingId, onPlan }: { routes: Route[]; onOpen: (route: Route) => void; headingId: string; onPlan: () => void }) {
   return <section className="direction-picker" aria-labelledby={headingId}>
     <div className="demo-route-heading">
-      <RouteIcon size={20} aria-hidden="true" />
-      <div><h1 id={headingId} tabIndex={-1}>示範路線</h1><p>第 11 組試走紀錄</p></div>
+      <div className="demo-heading-text"><RouteIcon size={20} aria-hidden="true" />
+        <div><h1 id={headingId} tabIndex={-1}>示範路線</h1><p>第 11 組試走紀錄</p></div>
+      </div>
+      <button className="button primary planner-start" type="button" onClick={onPlan}>規劃新路線<ArrowRight size={14} aria-hidden="true" /></button>
     </div>
     <ul className="walked-route-picker">
       {routes.map(route => {
@@ -148,6 +160,12 @@ export default function App() {
   const [communityOpen, setCommunityOpen] = useState(false)
   const [communitySegment, setCommunitySegment] = useState('')
   const [communityFocus, setCommunityFocus] = useState<{ coordinate: Coordinate; request: number }>()
+  const [plannerPicking, setPlannerPicking] = useState<EndpointSlot | 'observation' | null>(null)
+  const [plannerPickError, setPlannerPickError] = useState('')
+  const [plannerLegId, setPlannerLegId] = useState('')
+  const [draftRoute, setDraftRoute] = useState<PlannedRoute>()
+  const [draftCoordinate, setDraftCoordinate] = useState<Coordinate>()
+  const [draftLegId, setDraftLegId] = useState('')
   const community = useCommunity(!!campus)
   const mobile = useMediaQuery('(max-width: 760px), (max-height: 540px) and (max-width: 1000px)')
   const panelRef = useRef<HTMLElement>(null)
@@ -164,15 +182,40 @@ export default function App() {
   useEffect(() => { if (catalog) setRecentPlaces(readRecentPlaces(catalog.places)) }, [catalog])
 
   const routes = useMemo(buildWalkedRoutes, [])
+  const planning = state.screen === 'plan'
+  const plan = state.plan ?? initialPlan
+  const routing = useRoutingNetwork(planning)
   const communitySegments = useMemo(() => routes.flatMap(route => route.segments.map(segment => ({
     id: segment.id, name: segment.name, routeName: route.name, coordinate: lineMidpoint(segment.coordinates),
     coordinates: segment.approximate ? undefined : segment.coordinates, approximate: segment.approximate,
   }))), [routes])
+  const fieldPoints = useMemo(() =>
+    [...new Set(routes.flatMap(route => route.segments.flatMap(segment => segment.fieldPointIds ?? [])))]
+      .flatMap(id => fieldObservation(id) ?? []), [routes])
+  const plannedResult = useMemo(() => planning && routing.network && plan.start && plan.end
+    ? planRoutes(routing.network, plan.start.coordinate, plan.end.coordinate, plan.preference, {
+      walkedRoutes: routes, fieldPoints, reports: community.reports, reportSegments: communitySegments, now: community.now,
+    }) : undefined, [planning, routing.network, plan, routes, fieldPoints, community.reports, communitySegments, community.now])
+  const plannedRoutes = plannedResult?.status === 'ok' ? plannedResult.routes : emptyPlans
+  const planned = plannedRoutes.find(route => route.id === state.planChoice) ?? plannedRoutes[0]
+  const plannedLeg = planned?.legs.find(leg => leg.id === plannerLegId) ?? planned?.legs[0]
+  const plannedTour = useMemo<TourRoute | null>(() => planned ? {
+    id: planned.id, kind: 'planned', originEntrance: { id: 'start' },
+    segments: planned.legs.map(leg => ({
+      id: leg.id, name: leg.name, coordinates: leg.coordinates, status: 'unverified',
+      maxSlopePercent: leg.way.inclinePercent === null ? null : Math.abs(leg.way.inclinePercent),
+      minWidthM: leg.way.widthM, stepHeightCm: null, hasStairs: null,
+      surface: leg.way.surface ? surfaceLabel(leg.way.surface) : null, rampLengthM: null,
+      closed: null, obstacles: leg.reports.map(reportSummary),
+      photos: leg.fieldPointIds.flatMap(id => fieldObservation(id)?.photos ?? []),
+      source: 'OpenStreetMap 公開路網', retrievedAt: routing.network?.retrievedAt ?? null, verifiedAt: null,
+    })),
+  } : null, [planned, routing.network])
   const resolved = resolveSharedRoute(routes, state)
-  const selected = resolved.route ?? (state.screen === 'compare' ? routes[0] : undefined)
+  const selected = planning ? undefined : resolved.route ?? (state.screen === 'compare' ? routes[0] : undefined)
   const baseSegment = selected?.segments.find(segment => segment.id === state.segmentId) ?? selected?.segments[0]
   const tourRoute = selected && !resolved.problem && !discovering && state.screen === 'detail' ? selected : null
-  const tour = useRouteTour(tourRoute, state.segmentId)
+  const tour = useRouteTour(planning && !discovering ? plannedTour : tourRoute, planning ? plannerLegId : state.segmentId)
   const activeSegment = tourRoute && tour.engaged && tour.position ? tour.position.leg.segment : baseSegment
   const routeFieldIds = [...new Set(selected?.segments.flatMap(segment => segment.fieldPointIds ?? []) ?? [])]
   const routeAttention = routeFieldIds.flatMap(id => {
@@ -191,6 +234,8 @@ export default function App() {
   const rememberRouteView = () => {
     if (!discovering && state.screen === 'detail' && activeSegment) {
       routeView.current = { ...capturePanelView(), segmentId: activeSegment.id }
+    } else if (!discovering && planning) {
+      routeView.current = { ...capturePanelView(), segmentId: state.segmentId }
     }
   }
 
@@ -201,6 +246,9 @@ export default function App() {
         setSheetSize(defaultSheetSize(next))
         if (next.screen !== state.screen || !next.category) setFieldGroup(undefined)
         if (next.screen !== state.screen) {
+          setPlannerPicking(null)
+          setDraftRoute(undefined)
+          setDraftCoordinate(undefined)
           setPlaceQuery('')
           setBrowsingPlaces(false)
           routeView.current = null
@@ -235,6 +283,11 @@ export default function App() {
   const navigate = (patch: Partial<NavigationState>) => {
     const next = publicNavigation({ ...state, ...(patch.screen ? { placeId: undefined, category: undefined } : {}), ...patch })
     if (patch.screen) {
+      setPlannerPicking(null)
+      if (patch.screen !== 'plan') {
+        setDraftRoute(undefined)
+        setDraftCoordinate(undefined)
+      }
       setPlaceQuery('')
       setPlaceFeedback('')
       setBrowsingPlaces(false)
@@ -252,6 +305,60 @@ export default function App() {
     if (state.screen === 'saved' && patch.screen && patch.screen !== 'saved') setUndoFavorites(null)
   }
   const showDirections = () => navigate({ screen: 'compare', routeId: '', segmentId: '' })
+  const startPlanning = () => navigate({ screen: 'plan', plan, routeId: '', segmentId: '', mapTheme: 'routes' })
+  const changePlan = (next: PlanRequest) => {
+    tour.pause()
+    setPlannerLegId('')
+    setPlannerPicking(null)
+    setPlannerPickError('')
+    setDraftRoute(undefined)
+    setDraftCoordinate(undefined)
+    navigate({ ...(planning ? {} : { screen: 'plan' }), plan: next, planChoice: undefined, routeId: '', segmentId: '',
+      placeId: undefined, category: undefined, mapTheme: 'routes' })
+    setSheetSize('half')
+  }
+  const choosePlanEndpoint = (slot: EndpointSlot, endpoint?: PlanEndpoint) => changePlan({ ...plan, [slot]: endpoint })
+  const planFromPlace = (slot: EndpointSlot, place: CatalogPlace) => {
+    const known = place.routePlaceId ? routes.flatMap(route => [route.originEntrance, route.destinationEntrance])
+      .find(entrance => entrance.placeId === place.routePlaceId) : undefined
+    choosePlanEndpoint(slot, known ? planEndpoint(known.name, known.coordinate) : planEndpoint(place.name, place.coordinate))
+  }
+  const selectPlannedRoute = (id: string) => {
+    if (id === planned?.id) return
+    tour.pause()
+    setPlannerLegId('')
+    setDraftRoute(undefined)
+    setDraftCoordinate(undefined)
+    navigate({ planChoice: id })
+  }
+  const selectPlannedLeg = (id: string, showDetails = false) => {
+    tour.pause()
+    setPlannerLegId(id)
+    if (!showDetails) return
+    if (mobile && sheetSize === 'map') setSheetSize('half')
+    requestAnimationFrame(() => {
+      const details = document.getElementById('planner-leg-details-panel') as HTMLDetailsElement | null
+      if (details) { details.open = true; details.querySelector('select')?.focus() }
+    })
+  }
+  const beginPlannerPick = (slot: EndpointSlot | 'observation') => {
+    tour.pause()
+    setPlannerPicking(slot)
+    setPlannerPickError('')
+    if (mobile) setSheetSize('map')
+  }
+  const cancelPlannerPick = () => { setPlannerPicking(null); setPlannerPickError(''); setSheetSize('half') }
+  const commitPlannerPick = (coordinate: Coordinate) => {
+    if (plannerPicking === 'observation') {
+      try {
+        validateReportPoint(coordinate, draftRoute?.legs.find(leg => leg.id === draftLegId)?.coordinates)
+        setDraftCoordinate(coordinate)
+        cancelPlannerPick()
+      } catch (error) { setPlannerPickError(error instanceof Error ? error.message : '請選擇路段附近的位置。') }
+    } else if (plannerPicking) {
+      choosePlanEndpoint(plannerPicking, planEndpoint(plannerPicking === 'start' ? '地圖選點 A' : '地圖選點 B', coordinate))
+    }
+  }
   const openRoute = (route: Route, segmentId = route.segments[0]?.id ?? '') => {
     tour.pause()
     if (state.screen === 'detail' && state.routeId === route.id && !discovering) {
@@ -260,7 +367,9 @@ export default function App() {
       navigate({ screen: 'detail', origin: route.originEntrance.placeId, routeId: route.id, segmentId })
     }
   }
-  const routeLink = `${window.location.origin}${window.location.pathname}${publicHash({ ...state, screen: 'detail', routeId: selected?.id ?? state.routeId, placeId: undefined, category: undefined })}`
+  const plannedHash = publicHash({ ...state, screen: 'plan', plan, planChoice: planned?.id, routeId: '', segmentId: '', placeId: undefined, category: undefined })
+  const routeHash = planning ? plannedHash : publicHash({ ...state, screen: 'detail', routeId: selected?.id ?? state.routeId, placeId: undefined, category: undefined })
+  const routeLink = `${window.location.origin}${window.location.pathname}${routeHash}`
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(routeLink); setCopyMessage('路線連結已複製') }
     catch { setCopyMessage('請複製下方的路線連結'); setCopyFallback(true) }
@@ -269,15 +378,22 @@ export default function App() {
     try { writeFavorites(next); setFavorites(next); return true }
     catch { setFavoriteMessage('這個瀏覽器無法保存收藏。可以複製連結。'); return false }
   }
-  const saveFavorite = () => {
-    if (!selected) return
-    const saved = favoriteFor(selected, state)
-    const favorite = { ...saved, hash: publicHash({ ...state, screen: 'detail', routeId: selected.id, segmentId: '', placeId: undefined, category: undefined }) }
+  const addFavorite = (favorite: Favorite) => {
     if (favorites.length >= 20 && !favorites.some(item => item.key === favorite.key)) { setFavoriteMessage('收藏已滿 20 條，請先移除一條。'); return }
     if (persistFavorites([favorite, ...favorites.filter(item => item.key !== favorite.key)])) {
       setUndoFavorites(null)
       setFavoriteMessage('已加入這個瀏覽器的收藏。')
     }
+  }
+  const saveFavorite = () => {
+    if (!selected) return
+    const saved = favoriteFor(selected, state)
+    addFavorite({ ...saved, hash: publicHash({ ...state, screen: 'detail', routeId: selected.id, segmentId: '', placeId: undefined, category: undefined }) })
+  }
+  const savePlanned = () => {
+    if (!planned || !plan.start || !plan.end) return
+    addFavorite({ key: planned.id, name: `${plan.start.name} → ${plan.end.name}`, hash: plannedHash,
+      savedAt: new Date().toISOString(), mode: 'demo', origin: state.origin })
   }
   const inspectTourSegment = (segment: Segment) => {
     tour.pause()
@@ -364,11 +480,21 @@ export default function App() {
     const route = patch && routes.find(item => item.originEntrance.placeId === patch.origin)
     if (route) openRoute(route)
   }
+  const setPlacePlanEndpoint = (action: 'from' | 'to') => {
+    if (selectedPlace) planFromPlace(action === 'from' ? 'start' : 'end', selectedPlace)
+  }
   const placeEntrances = selectedPlace?.routePlaceId ? [...new Map(routes.flatMap(route => [route.originEntrance, route.destinationEntrance]).filter(entrance => entrance.placeId === selectedPlace.routePlaceId).map(entrance => [entrance.id, entrance])).values()] : []
   const placesTitle = placeQuery.trim() ? '搜尋結果' : fieldGroup?.title ?? (state.category ? categoryLabels[state.category] : '校園地點')
+  const planReportNote = community.truncated ? '社群回報只載入部分，沿途可能還有其他路況。'
+    : !conditionDataReady(community.fetchedAt, community.error, community.now) ? '目前未能取得完整的近期社群路況。' : ''
   const collapsed = discovering
     ? <div className="sheet-route-summary"><div><strong>{selectedPlace?.name ?? placesTitle}</strong></div><button onClick={() => setSheetSize('half')}>查看資訊</button></div>
-    : state.screen === 'compare' ? <DemoRoutePicker routes={routes} onOpen={openRoute} headingId="demo-mobile-heading" />
+    : planning ? plannerPicking
+      ? null
+      : plannedTour && tour.engaged
+        ? <RouteExplorer route={plannedTour} tour={tour} compact onInspect={segment => selectPlannedLeg(segment.id, true)} />
+        : <div className="sheet-route-summary"><div><strong>{planned ? `${formatDistance(planned.distanceM)} · 約 ${planned.estimateMinutes} 分鐘` : '路線規劃'}</strong></div><button onClick={() => setSheetSize('half')}>查看規劃</button></div>
+    : state.screen === 'compare' ? <DemoRoutePicker routes={routes} onOpen={openRoute} headingId="demo-mobile-heading" onPlan={startPlanning} />
     : tourRoute && tour.engaged ? <RouteExplorer route={tourRoute} tour={tour} compact onInspect={inspectTourSegment} />
     : <div className="sheet-route-summary"><div><strong>{selected?.name ?? '路線'}</strong></div><button onClick={() => setSheetSize('half')}>查看路線</button></div>
 
@@ -384,9 +510,9 @@ export default function App() {
         <button disabled={!campus} onClick={() => openCommunity()} aria-haspopup="dialog"><MessageSquare size={17} aria-hidden="true" /><span>路況</span></button>
       </nav>
     </header>
-    {mapScreen && state.screen !== 'compare' && <p className="route-scope-note"><Info size={16} aria-hidden="true" /><span>總圖與博雅的試走紀錄，部分通行條件尚未確認。</span></p>}
+    {mapScreen && !planning && state.screen !== 'compare' && <p className="route-scope-note"><Info size={16} aria-hidden="true" /><span>總圖與博雅的試走紀錄，部分通行條件尚未確認。</span></p>}
 
-    {state.screen === 'help' ? <HelpPage onDemo={showDirections} onSources={campus ? () => setShowSources(true) : undefined} />
+    {state.screen === 'help' ? <HelpPage onDemo={showDirections} onPlan={startPlanning} onSources={campus ? () => setShowSources(true) : undefined} />
       : state.screen === 'saved' ? <SavedRoutes favorites={favorites} allRoutes={routes} onOpen={favorite => navigate(fromHash(favorite.hash))}
         onRemove={key => { if (persistFavorites(favorites.filter(item => item.key !== key))) { setUndoFavorites(favorites); setFavoriteMessage('已移除收藏。') } }}
         onUndo={() => { if (undoFavorites && persistFavorites(undoFavorites)) { setUndoFavorites(null); setFavoriteMessage('已復原收藏。') } }}
@@ -395,16 +521,17 @@ export default function App() {
         {loading ? <><LoaderCircle className="spinner" size={28} /><h1>載入校園路線</h1></>
           : loadError && <><TriangleAlert size={32} /><h1>地圖資料暫時無法載入</h1><button className="button primary" onClick={retryCampus}>重新載入</button></>}
       </main>
-      : <main className={`workspace route-workspace ${catalog ? 'has-discovery' : ''}`} data-discovering={discovering} data-has-place={!!selectedPlace} data-sheet={sheetSize} data-screen={state.screen}>
-      <MapSheet label={discovering ? '地點資訊' : state.screen === 'compare' ? '示範路線' : '路線資訊'} size={sheetSize} onSize={setSheetSize}
-        showControls={state.screen !== 'compare' || discovering || sheetSize !== 'map'} mobile={mobile} panelRef={panelRef} collapsed={collapsed}>
+      : <main className={`workspace route-workspace ${catalog && !planning ? 'has-discovery' : ''}`} data-discovering={discovering} data-has-place={!!selectedPlace} data-sheet={sheetSize} data-screen={state.screen} data-planner-picking={!!plannerPicking}>
+      <MapSheet label={discovering ? '地點資訊' : planning ? '路線規劃' : state.screen === 'compare' ? '示範路線' : '路線資訊'} size={sheetSize} onSize={setSheetSize}
+        showControls={!plannerPicking && (state.screen !== 'compare' || discovering || sheetSize !== 'map')} mobile={mobile} panelRef={panelRef} collapsed={collapsed}>
         <div className="panel-main" key={state.screen}>
           {placeFeedback && <p className="place-endpoint-feedback" role="status">{placeFeedback}</p>}
           {discovering && catalog && (selectedPlace ? <>
             <CatalogStatus loading={false} error={placeData.error} onRetry={placeData.retry} />
             <PlaceCard key={selectedPlace.id} place={selectedPlace} catalog={catalog} entrances={placeEntrances} mode="demo"
-              onClose={closePlace} backLabel={hasPlaceList ? '返回地點清單' : state.screen === 'detail' ? '返回路線' : '返回地圖'}
-              onEndpoint={setPlaceEndpoint} onChoose={choosePlace} shareUrl={window.location.origin + window.location.pathname + publicHash({ ...state, category: undefined })} />
+              onClose={closePlace} backLabel={hasPlaceList ? '返回地點清單' : planning ? '返回規劃路線' : state.screen === 'detail' ? '返回路線' : '返回地圖'}
+              onEndpoint={setPlaceEndpoint} onPlanEndpoint={setPlacePlanEndpoint}
+              onChoose={choosePlace} shareUrl={window.location.origin + window.location.pathname + publicHash({ ...state, category: undefined })} />
           </> : state.placeId ? <section className="place-empty">
             <h1 id="place-heading" tabIndex={-1}>{placeData.loading ? '載入地點' : '找不到這個地點'}</h1>
             <CatalogStatus loading={false} error={placeData.error} onRetry={placeData.retry} />
@@ -415,8 +542,21 @@ export default function App() {
             backLabel="返回路線" loading={placeData.loading} error={placeData.error} onRetry={placeData.retry} />)}
 
           <div className="route-panel-content" hidden={discovering}>
-            {resolved.problem ? <UnavailableRoute problem={resolved.problem} onCompare={showDirections} onRoute={() => { if (selected) openRoute(selected) }} />
-              : state.screen === 'compare' ? <DemoRoutePicker routes={routes} onOpen={openRoute} headingId="panel-heading" />
+            {planning ? <PlannerPanel plan={plan} result={plannedResult} selected={planned} activeLeg={plannedLeg}
+              network={routing.network} networkError={routing.error} places={catalog?.places ?? []} reportsNote={planReportNote}
+              shareMessage={copyMessage || favoriteMessage} manualLink={copyFallback ? routeLink : undefined}
+              onPlace={planFromPlace} onMap={beginPlannerPick} onClear={choosePlanEndpoint}
+              onSwap={() => changePlan({ ...plan, start: plan.end, end: plan.start })}
+              onPreference={preference => changePlan({ ...plan, preference })}
+              onCandidate={selectPlannedRoute} onLeg={selectPlannedLeg} onField={choosePlaceById}
+              onBack={showDirections} onCopy={copyLink} onSave={savePlanned} onReport={openCommunity} onRetry={routing.retry}
+              onDraft={() => { tour.pause(); setDraftCoordinate(undefined); setDraftRoute(planned) }}
+              preview={plannedTour && <details className="planner-details" onToggle={event => { if (!event.currentTarget.open && sheetSize !== 'map') tour.pause() }}>
+                <summary>路線預演<ChevronDown size={15} aria-hidden="true" /></summary>
+                <RouteExplorer route={plannedTour} tour={tour} onInspect={segment => selectPlannedLeg(segment.id, true)} onStart={startTour} />
+              </details>} />
+              : resolved.problem ? <UnavailableRoute problem={resolved.problem} onCompare={showDirections} onRoute={() => { if (selected) openRoute(selected) }} />
+              : state.screen === 'compare' ? <DemoRoutePicker routes={routes} onOpen={openRoute} headingId="panel-heading" onPlan={startPlanning} />
               : selected && <>
               <div className="route-heading">
                 <div className="route-heading-tools">
@@ -475,7 +615,7 @@ export default function App() {
         </div>
       </MapSheet>
 
-      {catalog && <PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces}
+      {catalog && !planning && <PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces}
         onQuery={value => {
           if (value.trim()) rememberRouteView()
           tour.pause(); setFieldGroup(undefined); setBrowsingPlaces(false); setPlaceQuery(value)
@@ -492,7 +632,7 @@ export default function App() {
         }}
         onClearRecent={() => { if (clearRecentPlaces()) setRecentPlaces([]); else setPlaceFeedback('此瀏覽器無法清除最近查看。') }} />}
       <CampusMap campus={campus} routes={routes} selectedId={selected?.id ?? ''} segmentId={activeSegment?.id ?? ''} mode="demo" screen={state.screen}
-        layoutKey={mobile ? sheetSize : 'desktop'} mapTheme={state.mapTheme} onThemeChange={mapTheme => {
+        layoutKey={mobile ? sheetSize : 'desktop'} mapTheme={planning ? 'routes' : state.mapTheme} onThemeChange={planning ? undefined : mapTheme => {
           tour.pause(); setPlaceQuery(''); setBrowsingPlaces(false); navigate({ mapTheme, placeId: undefined, category: undefined })
           if (mobile) setSheetSize('map')
         }}
@@ -501,6 +641,13 @@ export default function App() {
         onSelectFieldGroup={chooseFieldGroup} onReturnRoutes={clearDiscovery} communityReports={community.reports}
         communitySegments={communitySegments} onSelectCommunity={openCommunity}
         mapObscured={mobile && sheetSize === 'full'}
+        planner={planning ? {
+          plan, routes: plannedRoutes, selectedId: planned?.id, legId: plannerLegId,
+          access: plannedResult?.status === 'ok' ? plannedResult.access : undefined,
+          picking: plannerPicking, observation: draftCoordinate,
+          onPick: commitPlannerPick, onRoute: selectPlannedRoute, onLeg: id => { clearDiscovery(); selectPlannedLeg(id, true) },
+        } : undefined}
+        plannerPickError={plannerPickError} onCancelPlannerPick={cancelPlannerPick}
         onLocationActivity={() => { tour.pause(); tour.setFollowing(false) }}
         preview={tour.engaged && tour.position && !tour.position.leg.segment.approximate ? { coordinate: tour.position.coordinate, following: tour.following, reducedMotion: tour.reducedMotion, playing: tour.playing } : undefined}
         onMapDrag={() => { if (tour.engaged && tour.following) tour.setFollowing(false) }}
@@ -510,6 +657,12 @@ export default function App() {
     <OfflineStatus />
     {showSources && campus && <SourceDialog campus={{ ...campus, sources: [...campus.sources, ...(catalog?.sources.filter(source => source.id === 'osm-amenities') ?? [])] }} onClose={() => setShowSources(false)} />}
     {campus && <CommunityDialog open={communityOpen} onClose={() => setCommunityOpen(false)} data={community} segments={communitySegments} initialSegment={communitySegment} onInspect={inspectCommunitySegment} onOpenPhoto={tour.pause} />}
+    {planning && draftRoute && plan.start && plan.end && <PlannerDraftDialog key={draftRoute.id} route={draftRoute}
+      start={plan.start} end={plan.end} activeLegId={plannedLeg?.id} open={plannerPicking !== 'observation'}
+      pickedPoint={draftCoordinate} pickedLegId={draftLegId} onPick={legId => {
+        setDraftCoordinate(undefined); setDraftLegId(legId); beginPlannerPick('observation')
+      }} onClearPick={() => setDraftCoordinate(undefined)}
+      onClose={() => { setDraftRoute(undefined); setDraftCoordinate(undefined); setDraftLegId('') }} />}
     {state.screen === 'confirm' && !resolved.problem && selected && campus && <PrintableRoute route={selected} state={state} snapshotDate={campus.retrievedAt} />}
     <div className="sr-only" aria-live="polite">{state.screen === 'detail' && activeSegment ? `目前路段 ${activeSegment.name}` : ''}</div>
   </div>

@@ -22,7 +22,7 @@ export function validateReportPoint(coordinate: Coordinate | null | undefined, l
   if (coordinate && (!line || distanceToLineM(coordinate, line) > 30)) throw new Error('標記需在所選路段 30 公尺內，請調整位置或改選路段。')
 }
 
-export function reportMatchesSegment(report: CommunityReport, segment: Segment, segments: CommunitySegment[] = []): boolean {
+export function reportMatchesSegment(report: CommunityReport, segment: Pick<Segment, 'id' | 'coordinates'>, segments: CommunitySegment[] = []): boolean {
   if (report.segmentId === segment.id) return true
   if (report.coordinate) return distanceToLineM(report.coordinate, segment.coordinates) <= 8
   // Legacy whole-segment reports also affect alternate routes sharing a length of that road.

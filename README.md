@@ -1,14 +1,16 @@
 # 輪椅友善路徑導航系統
 
-第 11 組輪椅友善路徑導航系統的 Web App 原始碼。公開版可選擇總圖與博雅之間的去程或回程，查看沿途實勘照片與單點量測。
+第 11 組輪椅友善路徑導航系統的 Web App 原始碼。可在臺大與周邊選起終點，沿公開路網規劃路線，也可看總圖與博雅的去回程、實勘照片與單點量測。
 
-公開測試網址：https://ntu-wheelway-11.brainyshell5.chatgpt.site/
+公開測試網址：https://ntu-wheelway-11.hsb7023.chatgpt.site/
 
 Public GitHub repo：https://github.com/Alanchou888/ntu-wheelway-11
 
 ## 目前的 MVP
 
-首頁直接選方向。搜尋、更多設施、路況回報、分享與收藏均可使用。公開操作的前後差異、團隊工具及資料範圍見 [MVP 公開介面整理](docs/MVP-公開介面整理.md)。
+從首頁按「規劃新路線」搜尋或選起終點，查看距離、估時、候選路線與沿途已知路況。原有去回程現在可從「示範路線」查看。地圖搜尋、設施、路況、分享、收藏和預演也可使用。
+
+公開路網來源、目前涵蓋範圍及更新方式見 [動態路徑規劃](docs/動態路徑規劃.md)。試走介面和團隊工具見 [MVP 公開介面整理](docs/MVP-公開介面整理.md)。
 
 ## 既有版本功能紀錄
 
@@ -72,7 +74,7 @@ npm.cmd run build
 npm.cmd run preview
 ```
 
-網站包含 `dist/client` 前端、`dist/server` Worker 與 `dist/.openai` 發布資訊。社群功能需要 Sites 的 D1 與 R2，相關設定見 v2.2 文件。分享網址保存方向、路段或地點，可直接重新開啟。
+網站包含 `dist/client` 前端、`dist/server` Worker 與 `dist/.openai` 發布資訊。社群功能需要 Sites 的 D1 與 R2，相關設定見 v2.2 文件。規劃路線的分享連結帶有起終點和選路偏好，重開時會用當時的資料重算。
 
 團隊可執行 `npm.cmd run team`，從 `http://127.0.0.1:5173/team` 編輯本機草稿或下載空白範本。
 

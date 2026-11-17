@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Route } from './types'
 import { advanceTour, clampDistance, createTour, positionAt } from './route-tour'
+import type { TourRoute } from './route-tour'
 
 export function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
@@ -19,7 +19,7 @@ interface Playback {
   speed: number; pauseEach: boolean; following: boolean; notice: string
 }
 
-export function useRouteTour(route: Route | null, selectedSegmentId: string) {
+export function useRouteTour(route: TourRoute | null, selectedSegmentId: string) {
   const model = useMemo(() => createTour(route), [route])
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const key = `${model.key}|${selectedSegmentId}`

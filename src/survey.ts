@@ -212,7 +212,7 @@ export async function writeLocalSurvey(data: SurveyData, expectedRevision: numbe
   if (new Blob([JSON.stringify(parsed)]).size > MAX_IMPORT_BYTES) return Promise.reject(new Error('完整草稿超過 20 MB，請縮小照片後再儲存'))
   return database('write', parsed, expectedRevision)
 }
-function database(action: 'read' | 'write', data?: SurveyData, expectedRevision?: number | null): Promise<StoredSurvey> {
+export function openSurveyDraftDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('wheelway-field-survey', 1)
     let settled = false
@@ -223,30 +223,36 @@ function database(action: 'read' | 'write', data?: SurveyData, expectedRevision?
       const db = request.result
       if (settled) { db.close(); return }
       db.onversionchange = () => db.close()
-      let tx: IDBTransaction
-      try { tx = db.transaction('drafts', action === 'read' ? 'readonly' : 'readwrite') }
-      catch { db.close(); reject(new Error('本機資料庫格式不符，請先保留備份並檢查網站儲存空間')); return }
-      const store = tx.objectStore('drafts'), op = store.get('current-v1')
-      let result: StoredSurvey = { data: null, revision: null, savedAt: null }
-      let failure: unknown = null
-      op.onsuccess = () => {
-        try {
-          if (action === 'read') result = storedSurvey(op.result)
-          else {
-            const actualRevision = storedRevision(op.result)
-            if (actualRevision !== expectedRevision) throw new SurveyConflictError(storedSurvey(op.result))
-            const revision = (actualRevision ?? 0) + 1, savedAt = new Date().toISOString()
-            // Read, compare and put share one transaction, preventing a stale tab
-            // from overwriting a newer draft between the comparison and the put.
-            store.put({ ...data, _storage: { revision, savedAt } }, 'current-v1')
-            result = { data: data!, revision, savedAt }
-          }
-        } catch (e) { failure = e; tx.abort() }
-      }
-      tx.oncomplete = () => { db.close(); resolve(result) }
-      tx.onerror = () => { db.close(); reject(failure ?? new Error('本機儲存失敗，請匯出 JSON 備份')) }
-      tx.onabort = () => { db.close(); reject(failure ?? new Error('本機儲存未完成，請匯出 JSON 備份')) }
+      resolve(db)
     }
+  })
+}
+
+async function database(action: 'read' | 'write', data?: SurveyData, expectedRevision?: number | null): Promise<StoredSurvey> {
+  const db = await openSurveyDraftDatabase()
+  return new Promise((resolve, reject) => {
+    let tx: IDBTransaction
+    try { tx = db.transaction('drafts', action === 'read' ? 'readonly' : 'readwrite') }
+    catch { db.close(); reject(new Error('本機資料庫格式不符，請先保留備份並檢查網站儲存空間')); return }
+    const store = tx.objectStore('drafts'), op = store.get('current-v1')
+    let result: StoredSurvey = { data: null, revision: null, savedAt: null }
+    let failure: unknown = null
+    op.onsuccess = () => {
+      try {
+        if (action === 'read') result = storedSurvey(op.result)
+        else {
+          const actualRevision = storedRevision(op.result)
+          if (actualRevision !== expectedRevision) throw new SurveyConflictError(storedSurvey(op.result))
+          const revision = (actualRevision ?? 0) + 1, savedAt = new Date().toISOString()
+          // Keep the compare and write in one transaction for concurrent tabs.
+          store.put({ ...data, _storage: { revision, savedAt } }, 'current-v1')
+          result = { data: data!, revision, savedAt }
+        }
+      } catch (e) { failure = e; tx.abort() }
+    }
+    tx.oncomplete = () => { db.close(); resolve(result) }
+    tx.onerror = () => { db.close(); reject(failure ?? new Error('本機儲存失敗，請匯出 JSON 備份')) }
+    tx.onabort = () => { db.close(); reject(failure ?? new Error('本機儲存未完成，請匯出 JSON 備份')) }
   })
 }
 

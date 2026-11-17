@@ -5,6 +5,7 @@ import type {CatalogCategory,CatalogPlace,Entrance,Mode,PlaceCatalog} from './ty
 import {categoryLabels,findPlaces,placeCategories} from './places'
 import {distance,formatDate,formatDistance} from './routes'
 import {fieldKinds,fieldObservation,formatFieldAngle} from './field-observations'
+import {canPlanToPlace} from './planning-params'
 import type {FieldObservation} from './field-observations'
 import {BoyaFloorPlan,boyaFloorPointIds} from './BoyaFloorPlan'
 import PhotoGallery from './PhotoGallery'
@@ -119,12 +120,13 @@ export function PlaceList({catalog,results,category,title,onChoose,onBack,loadin
   </section>
 }
 
-export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onChoose,shareUrl,backLabel='返回地圖資訊'}:{place:CatalogPlace;catalog:PlaceCatalog;entrances:Entrance[];mode:Mode;onClose:()=>void;onEndpoint:(action:'from'|'to')=>void;onChoose:(place:CatalogPlace)=>void;shareUrl:string;backLabel?:string}){
+export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onPlanEndpoint,onChoose,shareUrl,backLabel='返回地圖資訊'}:{place:CatalogPlace;catalog:PlaceCatalog;entrances:Entrance[];mode:Mode;onClose:()=>void;onEndpoint:(action:'from'|'to')=>void;onPlanEndpoint?:(action:'from'|'to')=>void;onChoose:(place:CatalogPlace)=>void;shareUrl:string;backLabel?:string}){
   const [copy,setCopy]=useState('')
   const [fallback,setFallback]=useState(false)
   const heading=useRef<HTMLHeadingElement>(null)
   useEffect(()=>{heading.current?.focus({preventScroll:true})},[])
   const field=fieldObservation(place.id)
+  const planHere = canPlanToPlace(place) ? onPlanEndpoint : undefined
   const angleSamples = field?.angles?.flatMap(reading => reading.degrees ?? []) ?? []
   const minAngle = Math.min(...angleSamples)
   const maxAngle = Math.max(...angleSamples)
@@ -181,9 +183,11 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onCho
     <div className={`place-card-symbol ${place.category}`}><PlaceIcon category={place.category} size={30}/><span>{categoryLabels[place.category]}</span></div>
     <h1 id="place-heading" ref={heading} tabIndex={-1}>{place.name}</h1>
     <p className="place-card-subtitle">{categoryLabels[place.category]}</p>
-    <div className={`place-card-actions ${place.routePlaceId?'':'share-only'}`}>
-      {place.routePlaceId&&<><button className="button primary" onClick={()=>onEndpoint('to')}><ArrowRight size={17} aria-hidden="true"/>前往這裡</button>
-        <button className="button secondary" onClick={()=>onEndpoint('from')}><MapPin size={17} aria-hidden="true"/>從這裡出發</button></>}
+    <div className={`place-card-actions ${planHere || place.routePlaceId?'':'share-only'}`}>
+      {planHere ? <><button className="button primary" onClick={()=>planHere('to')}><ArrowRight size={17} aria-hidden="true"/>設為終點</button>
+        <button className="button secondary" onClick={()=>planHere('from')}><MapPin size={17} aria-hidden="true"/>設為起點</button></>
+        : place.routePlaceId && <><button className="button primary" onClick={()=>onEndpoint('to')}><ArrowRight size={17} aria-hidden="true"/>前往這裡</button>
+          <button className="button secondary" onClick={()=>onEndpoint('from')}><MapPin size={17} aria-hidden="true"/>從這裡出發</button></>}
       <button className="place-share" onClick={share}><Copy size={17} aria-hidden="true"/>分享</button>
     </div>
     {shareStatus}

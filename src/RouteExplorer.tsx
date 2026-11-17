@@ -1,5 +1,6 @@
 import { Crosshair, Image, Pause, Play, RotateCcw, SkipBack, SkipForward } from 'lucide-react'
-import type { Route, Segment } from './types'
+import type { Segment } from './types'
+import type { TourRoute } from './route-tour'
 import type { TourController } from './useRouteTour'
 import PhotoGallery from './PhotoGallery'
 
@@ -45,7 +46,7 @@ function Transport({ tour, onStart }: { tour: TourController; onStart?: () => vo
   </div>
 }
 
-export default function RouteExplorer({ route, tour, compact = false, onInspect, onStart }: { route: Route; tour: TourController; compact?: boolean; onInspect: (segment: Segment) => void; onStart?: () => void }) {
+export default function RouteExplorer({ route, tour, compact = false, onInspect, onStart }: { route: TourRoute; tour: TourController; compact?: boolean; onInspect: (segment: Segment) => void; onStart?: () => void }) {
   const position = tour.position
   if (!position) return null
   const { segment } = position.leg
@@ -56,8 +57,8 @@ export default function RouteExplorer({ route, tour, compact = false, onInspect,
     {tour.reducedMotion && <p className="compact-reduced-note">已減少動態，可用上一段與下一段檢視。</p>}
     <span className="sr-only" role="status">{tour.notice}</span>
   </div>
-  if (route.walked) return <section className="route-explorer walked-tour" aria-label="路線預演">
-    <p className="tour-data-label">依地標預演，非即時定位。</p>
+  if (route.walked || route.kind === 'planned') return <section className="route-explorer walked-tour" aria-label="路線預演">
+    <p className="tour-data-label">{route.kind === 'planned' ? '依公開路網預演。' : '依地標預演，非即時定位。'}</p>
     <p><strong>{segment.name}</strong></p>
     {segment.approximate && <p className="tour-data-label">館內轉折尚未測繪，可查看實勘照片。</p>}
     <div className="tour-playback-row">

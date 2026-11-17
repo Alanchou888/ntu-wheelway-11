@@ -1,4 +1,5 @@
 import type { FeatureCollection } from 'geojson'
+import type { PlanRequest } from './planning-params'
 
 export type Coordinate = [number, number]
 export type CatalogCategory = 'building' | 'toilet' | 'elevator' | 'water' | 'rest' | 'ramp' | 'landmark' | 'field'
@@ -16,7 +17,7 @@ export type Mode = 'demo' | 'survey'
 export type Preference = 'gentle' | 'short'
 export type MapTheme = 'routes' | 'conditions' | 'slope' | 'facilities'
 export type Wheelchair = 'manual' | 'electric'
-export type Screen = 'setup' | 'compare' | 'detail' | 'confirm' | 'editor' | 'saved' | 'help'
+export type Screen = 'setup' | 'compare' | 'detail' | 'confirm' | 'editor' | 'saved' | 'help' | 'plan'
 export interface Photo { src: string; alt: string; caption: string; sourceUrl?: string }
 export interface Place { id: PlaceId; name: string; coordinate: Coordinate; uid: string; sourceId: string; kind: 'building' }
 export interface PublicSource { id: string; label: string; url: string; retrievedAt: string; status: 'ok' | 'cached'; note?: string }
@@ -39,4 +40,4 @@ export interface Route {
 export interface SurveyData { version: number; routes: Route[] }
 export interface RouteMetrics { distanceM: number; maxSlopePercent: number | null; minWidthM: number | null; maxStepCm: number | null; surfaces: string[] }
 export interface RouteLimits { maxSlope: number | null; minWidth: number | null; maxStep: number | null; recheckDays: number | null }
-export interface NavigationState { screen: Screen; mode: Mode; origin: PlaceId; wheelchair: Wheelchair; preference: Preference; routeId: string; segmentId: string; limits?: RouteLimits; placeId?: string; category?: CatalogCategory; avoidReports?: boolean; mapTheme?: MapTheme }
+export interface NavigationState { screen: Screen; mode: Mode; origin: PlaceId; wheelchair: Wheelchair; preference: Preference; routeId: string; segmentId: string; limits?: RouteLimits; placeId?: string; category?: CatalogCategory; avoidReports?: boolean; mapTheme?: MapTheme; plan?: PlanRequest; planChoice?: string }

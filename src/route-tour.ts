@@ -1,4 +1,4 @@
-import type { Coordinate, Route, Segment } from './types'
+import type { Coordinate, Entrance, Route, Segment } from './types'
 import { distance, lineDistance } from './routes'
 
 export interface TourLeg {
@@ -10,8 +10,12 @@ export interface TourLeg {
 }
 export interface RouteTour { key: string; legs: TourLeg[]; distanceM: number }
 export interface TourPosition { leg: TourLeg; coordinate: Coordinate; distanceM: number }
+export type TourRoute = Pick<Route, 'id' | 'segments' | 'walked'> & {
+  kind: Route['kind'] | 'planned'
+  originEntrance: Pick<Entrance, 'id'>
+}
 
-export function createTour(route: Route | null): RouteTour {
+export function createTour(route: TourRoute | null): RouteTour {
   if (!route) return { key: '', legs: [], distanceM: 0 }
   let accumulated = 0
   const legs = route.segments.map((segment, index) => {
