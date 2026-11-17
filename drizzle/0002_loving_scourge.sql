@@ -1,0 +1,1 @@
+ALTER TABLE `community_reports` ADD `measurements` text;

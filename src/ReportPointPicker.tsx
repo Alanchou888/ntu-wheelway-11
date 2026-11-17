@@ -3,9 +3,11 @@ import L from 'leaflet'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, MapPin, X } from 'lucide-react'
 import type { Coordinate } from './types'
 import type { CommunitySegment } from './community-model'
-import { validateReportPoint } from './road-conditions'
+import { isRoadReportId } from './community-model'
+import { reportRoadReachM } from './community-roads'
+import { distanceToLineM, validateReportPoint } from './road-conditions'
 
-export default function ReportPointPicker({ segment, coordinate, onChange, active }: { segment?: CommunitySegment; coordinate: Coordinate | null; onChange: (point: Coordinate | null) => void; active: boolean }) {
+export default function ReportPointPicker({ segment, coordinate, onChange, active, practice = false }: { segment?: CommunitySegment; coordinate: Coordinate | null; onChange: (point: Coordinate | null) => void; active: boolean; practice?: boolean }) {
   const root = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const pin = useRef<L.Marker | null>(null)
@@ -16,9 +18,13 @@ export default function ReportPointPicker({ segment, coordinate, onChange, activ
   const [error, setError] = useState('')
   const [tilesFailed, setTilesFailed] = useState(false)
   const hint = useId()
+  const required = !!segment && isRoadReportId(segment.id)
   const choose = (point: Coordinate) => {
     try {
-      validateReportPoint(point, actions.current.segment?.coordinates)
+      const target = actions.current.segment
+      if (target && isRoadReportId(target.id)) {
+        if (distanceToLineM(point, target.coordinates ?? []) > reportRoadReachM) throw new Error('請將位置標在選定道路附近。')
+      } else validateReportPoint(point, target?.coordinates)
       setError('')
       actions.current.onChange(point.map(n => Number(n.toFixed(6))) as Coordinate)
     } catch (e) { setError(e instanceof Error ? e.message : '請重新選擇位置。') }
@@ -69,12 +75,12 @@ export default function ReportPointPicker({ segment, coordinate, onChange, activ
     choose([start[0] + east / (111_320 * Math.cos(start[1] * Math.PI / 180)), start[1] + north / 111_320])
   }
   return <section className="report-point-picker" aria-label="選擇障礙位置">
-    <div className="report-point-heading"><strong><MapPin size={17} aria-hidden="true" />標記位置（選填）</strong>{coordinate && <button type="button" onClick={() => { onChange(null); setError('') }}><X size={15} />清除</button>}</div>
-    <p id={hint}>點選藍色路段附近，或用下方按鈕選取及微調。發布後，這個標記位置會公開顯示。</p>
+    <div className="report-point-heading"><strong><MapPin size={17} aria-hidden="true" />標記位置{required ? '' : '（選填）'}</strong>{coordinate && <button type="button" onClick={() => { onChange(null); setError('') }}><X size={15} aria-hidden="true" />清除</button>}</div>
+    <p id={hint}>點選藍色路段附近，或用下方按鈕選取及微調。{practice ? '位置只會用在示範練習。' : required ? '公開標記會貼在選定道路上。' : '發布後，標記位置會公開顯示。'}</p>
     <div ref={root} className="report-point-map" role="group" aria-label="回報落點地圖，可改用下方按鈕選取位置" aria-describedby={hint} />
     {tilesFailed && <p className="report-point-notice">底圖暫時無法載入，藍色路段與下方位置按鈕仍可使用。</p>}
     <div className="report-point-tools"><button type="button" className="button secondary" onClick={() => { choose(segment.coordinate); map.current?.panTo([segment.coordinate[1], segment.coordinate[0]], { animate: false }) }}>選取路段中點</button><div className="report-point-nudge" role="group" aria-label="微調標記，每次 2 公尺">{[{ x: -2, y: 0, label: '向西移動 2 公尺', Icon: ArrowLeft }, { x: 0, y: 2, label: '向北移動 2 公尺', Icon: ArrowUp }, { x: 0, y: -2, label: '向南移動 2 公尺', Icon: ArrowDown }, { x: 2, y: 0, label: '向東移動 2 公尺', Icon: ArrowRight }].map(({ x, y, label, Icon }) => <button key={label} type="button" disabled={!coordinate} aria-label={label} title={label} onClick={() => nudge(x, y)}><Icon size={18} /></button>)}</div></div>
-    <p className="report-point-value" role="status">{coordinate ? `已選位置：${coordinate[1].toFixed(6)}, ${coordinate[0].toFixed(6)}。方向按鈕每次微調 2 公尺。` : '尚未指定位置，將以整段道路回報。'}</p>
+    <p className="report-point-value" role="status">{coordinate ? '已標記位置。方向按鈕每次微調 2 公尺。' : required ? '請先在圖上選擇位置。' : '尚未指定位置，將以整段道路回報。'}</p>
     {error && <p className="report-point-error" role="alert">{error}</p>}
   </section>
 }

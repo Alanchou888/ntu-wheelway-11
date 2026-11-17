@@ -12,6 +12,9 @@
 .report-impact { padding:3px 7px; border-radius:4px; font-size:11px; white-space:nowrap; color:#43576c; background:#eef2f6; }
 .report-impact.difficult { background:#fff0d9; color:#80501a; }
 .report-impact.blocked { background:#fae7e5; color:#973628; }
+.report-measurements { margin: 6px 0 10px; padding: 9px 11px; border-radius: 7px; background: #f1f5f9; }
+.report-measurements small { font-size: 12px; color: var(--muted); }
+.report-measurements ul { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0; margin: 3px 0 0; list-style: none; font-size: 13px; }
 .report-segment { display:flex; align-items:center; gap:4px; color:var(--muted); margin-top:8px; font-size:12px; }
 .report-message { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:1.9; margin:10px 0; }
 .report-meta { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:11px; color:var(--muted); line-height:1.9; }
@@ -46,6 +49,24 @@
 .community-dialog-header h2 { font-size:24px; }
 .community-dialog-header p { font-size:13px; color:var(--muted); margin-top:5px; }
 .community-dialog-body { padding:18px 24px 28px; }
+.community-dialog-header .icon-button { min-width: 44px; min-height: 44px; }
+.community-views { display: flex; gap: 5px; padding: 8px 24px 0; border-bottom: 1px solid var(--border); }
+.community-views button {
+  min-height: 44px; padding: 0 14px; background: #fff; color: var(--muted);
+  border-bottom: 2px solid transparent; font-size: 14px; font-weight: 600;
+}
+.community-views button[aria-pressed='true'] { color: #174785; border-bottom-color: #205db6; }
+.community-contribute { display: flex; flex-wrap: wrap; gap: 7px; margin: 6px 0 14px; }
+.community-contribute .button { min-height: 44px; }
+.community-list-heading button[aria-pressed='true'] { background: #eaf2fd; border-color: #205db6; }
+.practice-banner { padding: 11px 13px; border: 1px solid #dfcca5; border-radius: 8px; background: #fff7e7; color: #654620; margin-bottom: 13px; }
+.practice-banner p { margin: 4px 0 0; font-size: 13px; }
+.practice-pill { display: inline-block; margin-right: 6px; padding: 3px 6px; border-radius: 4px; background: #f7edd8; color: #654620; font-size: 11px; }
+.report-draft-road { display: flex; align-items: center; gap: 6px; color: #174785; font-weight: 600; }
+.community-measure-fields > summary { min-height: 44px; align-content: center; cursor: pointer; font-size: 14px; }
+.community-measure-fields > p { margin: 0 0 7px; color: var(--muted); font-size: 12px; }
+.community-measure-fields > .community-field-pair { padding-bottom: 5px; }
+.planner-leg-report { display: block; }
 .community-filter { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(0,1fr); gap:10px; margin:16px 0 2px; }
 .community-filter label, .community-form label, .community-admin label { display:grid; gap:6px; min-width:0; font-size:13px; }
 .community-filter select, .community-form select, .community-form input:not([type='file']), .community-form textarea, .community-admin input { min-height:44px; width:100%; min-width:0; max-width:100%; padding:9px; border:1px solid var(--control-border); border-radius:6px; color:var(--ink); background:#fff; font:inherit; font-size:14px; }
@@ -92,8 +113,13 @@
   .community-dialog-header { padding:15px 16px 12px; }
   .community-dialog-header h2 { font-size:22px; }
   .community-dialog-body { padding:14px 16px 22px; }
+  .community-views { padding-inline: 16px; }
+  .community-contribute { align-items: stretch; }
+  .community-contribute .button { flex: 1 0 auto; }
   .community-form { padding:14px; }
   .community-field-pair { grid-template-columns:1fr; }
   .community-filter { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:8px; }
+  .mvp .route-workspace[data-planner-picking='true'] .map-actions { top: 12px; flex-direction: row; }
+  .mvp .route-workspace[data-planner-picking='true'] .map-legend { display: none; }
 }
 @media print { .community-section, .community-dialog { display:none!important; } }

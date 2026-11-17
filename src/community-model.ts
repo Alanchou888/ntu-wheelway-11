@@ -2,7 +2,7 @@ import type { Coordinate } from './types'
 
 export const categories = {
   parking: '違停佔用', rough: '路面顛簸', construction: '施工封路', water: '積水',
-  traffic: '車流較大', lighting: '照明不足', other: '其他路況',
+  traffic: '車流較大', lighting: '照明不足', curb: '路緣或階梯', narrow: '通道狹窄', ramp: '坡道狀況', other: '其他路況',
 } as const
 export const impacts = { passable: '仍可通行', difficult: '通行困難', blocked: '無法通行' } as const
 export const reactions = { exists: '仍然存在', resolved: '已排除', different: '現場不同' } as const
@@ -16,14 +16,40 @@ export interface CommunityReport {
   photoUrl: string | null; own: boolean
   counts: Record<Reaction, number>; lastExistsAt: string | null; lastResolvedAt: string | null; lastDifferentAt: string | null
   myReaction: Reaction | null; updates: { reaction: Reaction; note: string; name: string; at: string }[]
+  measurements?: ReportMeasurements | null
 }
 export interface CommunitySession { signedIn: boolean; available: boolean }
 export interface ReportInput {
   segmentId: string; category: ReportCategory; impact: ReportImpact; message: string; authorName: string; observedAt: string
   coordinate?: Coordinate | null
+  measurements?: ReportMeasurements | null
 }
 export interface CommunitySegment { id: string; name: string; routeName: string; coordinate: Coordinate; coordinates?: Coordinate[]; approximate?: boolean }
-const hours: Record<ReportCategory, number> = { parking: 6, rough: 24 * 30, construction: 72, water: 12, traffic: 3, lighting: 24 * 7, other: 24 }
+export interface ReportMeasurements { widthCm: number | null; stepCm: number | null; slopePercent: number | null; surface: string | null }
+const hours: Record<ReportCategory, number> = {
+  parking: 6, rough: 24 * 30, construction: 72, water: 12, traffic: 3, lighting: 24 * 7,
+  curb: 24 * 30, narrow: 24 * 30, ramp: 24 * 30, other: 24,
+}
+
+export function roadReportId(osmId: number) { return `osm-${osmId}` }
+export function isRoadReportId(id: string) { return /^osm-[1-9]\d{0,15}$/.test(id) }
+
+export function parseReportMeasurements(value: unknown): ReportMeasurements | null {
+  if (value == null) return null
+  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('請檢查單點量測。')
+  const data = value as Partial<ReportMeasurements>
+  const read = (key: 'widthCm' | 'stepCm' | 'slopePercent', label: string, min: number, max: number) => {
+    const number = data[key]
+    if (number == null) return null
+    if (typeof number !== 'number' || !Number.isFinite(number) || number < min || number > max) throw new Error(`${label}需介於 ${min} 和 ${max} 之間。`)
+    return number
+  }
+  const surface = typeof data.surface === 'string' ? data.surface.trim() || null : null
+  if (data.surface != null && typeof data.surface !== 'string' || surface && (/\p{Cc}/u.test(surface) || surface.length > 40)) throw new Error('路面材質最多 40 字。')
+  const result = { widthCm: read('widthCm', '淨寬（公分）', 1, 5000),
+    stepCm: read('stepCm', '階差（公分）', 0, 150), slopePercent: read('slopePercent', '坡度（%）', 0, 100), surface }
+  return Object.values(result).every(part => part === null) ? null : result
+}
 
 export function reportState(report: CommunityReport, now = Date.now()): { label: string; kind: 'active' | 'stale' | 'resolved' | 'disputed' } {
   const observed = Date.parse(report.observedAt)
@@ -34,7 +60,16 @@ export function reportState(report: CommunityReport, now = Date.now()): { label:
   if (different >= last && different > 0) return { label: '現場有不同回報', kind: 'disputed' }
   if (resolved >= last && resolved > 0) return { label: '有人回報已排除', kind: 'resolved' }
   if (!Number.isFinite(last) || now - last > hours[report.category] * 3_600_000) return { label: '待重新確認', kind: 'stale' }
-  return { label: '近期回報', kind: 'active' }
+  return { label: report.counts?.exists ? '有人確認仍存在' : '待他人確認', kind: 'active' }
+}
+
+export function needsReportCheck(report: CommunityReport, now = Date.now()) {
+  const { kind } = reportState(report, now)
+  return kind === 'stale' || kind === 'disputed' || (kind === 'active' && !report.counts.exists)
+}
+
+export function excludesPlannedRoad(report: CommunityReport) {
+  return report.impact === 'blocked' && (!isRoadReportId(report.segmentId) || report.counts.exists > 0)
 }
 
 export function validateReport(input: unknown, segmentIds: ReadonlySet<string>, now = Date.now()): ReportInput {
@@ -53,7 +88,8 @@ export function validateReport(input: unknown, segmentIds: ReadonlySet<string>, 
   if (!Number.isFinite(timestamp) || timestamp > now + 120_000 || now - timestamp > 30 * 86_400_000) throw new Error('發現時間需在最近 30 天內，且不能晚於目前時間。')
   const coordinate = value.coordinate == null ? null : value.coordinate
   if (coordinate !== null && (!Array.isArray(coordinate) || coordinate.length !== 2 || !coordinate.every(n => typeof n === 'number' && Number.isFinite(n)) || coordinate[0] < -180 || coordinate[0] > 180 || coordinate[1] < -90 || coordinate[1] > 90)) throw new Error('請選擇有效的地圖位置。')
-  return { segmentId, category: value.category as ReportCategory, impact: value.impact as ReportImpact, message: text('message', 5, 500), authorName: text('authorName', 0, 24) || '校園使用者', observedAt: new Date(timestamp).toISOString(), coordinate: coordinate === null ? null : (coordinate as number[]).map(n => Number(n.toFixed(6))) as Coordinate }
+  return { segmentId, category: value.category as ReportCategory, impact: value.impact as ReportImpact, message: text('message', 5, 500), authorName: text('authorName', 0, 24) || '校園使用者', observedAt: new Date(timestamp).toISOString(), coordinate: coordinate === null ? null : (coordinate as number[]).map(n => Number(n.toFixed(6))) as Coordinate,
+    measurements: parseReportMeasurements(value.measurements) }
 }
 
 export function communitySummary(reports: CommunityReport[], ids: ReadonlySet<string>, now = Date.now()) {

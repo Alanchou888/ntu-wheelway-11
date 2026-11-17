@@ -15,6 +15,13 @@
       "when": 1792647253462,
       "tag": "0001_thin_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794901012279,
+      "tag": "0002_loving_scourge",
+      "breakpoints": true
     }
   ]
 }

@@ -1,12 +1,12 @@
 import createGraph from 'ngraph.graph'
 import { aStar } from 'ngraph.path'
-import { categories, reportState } from './community-model'
+import { categories, excludesPlannedRoad, impacts, isRoadReportId, reportState, roadReportId } from './community-model'
 import type { CommunityReport, CommunitySegment } from './community-model'
 import type { FieldObservation } from './field-observations'
-import { reportMatchesSegment } from './road-conditions'
+import { distanceToLineM, reportMatchesSegment } from './road-conditions'
 import { distance } from './routes'
 import type { PlanningPreference } from './planning-params'
-import { inRoutingBounds } from './routing-network'
+import { inRoutingBounds, roadName } from './routing-network'
 import type { RoadWay, RoutingNetwork } from './routing-network'
 import type { Coordinate, Route } from './types'
 
@@ -93,10 +93,13 @@ function roadEdges(network: RoutingNetwork, context: PlanningContext) {
       const reports = way.separateLevel ? [] : active.filter(report => {
         const source = segments.get(report.segmentId)
         if (source?.approximate) return false
-        if (report.coordinate) return reportMatchesSegment(report, { id: `osm-${way.osmId}`, coordinates: line })
+        if (isRoadReportId(report.segmentId)) {
+          return report.segmentId === roadReportId(way.osmId) && !!report.coordinate && distanceToLineM(report.coordinate, line) <= 8
+        }
+        if (report.coordinate) return reportMatchesSegment(report, { id: roadReportId(way.osmId), coordinates: line })
         return !!source?.coordinates && isSharedLine(...line, source.coordinates)
       })
-      if (reports.some(report => report.impact === 'blocked')) continue
+      if (reports.some(excludesPlannedRoad)) continue
       // Share a key for coincident mapped edges, even if they have different node IDs.
       const key = line.map(point => point.map(value => value.toFixed(6)).join(',')).sort().join('|')
       edges.push({ id, key, from, to, way, line, distanceM, reports })
@@ -150,7 +153,7 @@ function edgeCost(arc: Arc, weights: RoutingWeights) {
   return arc.distanceM * (1 + weights.grade * uphill + weights.ramp * Number(way.ramp) +
     weights.rough * Number(rough(way)) + weights.narrow * narrow + weights.limited * Number(way.wheelchair === 'limited') +
     weights.unknown * Number(missing(way)) + weights.sharedRoad * Number(sharedRoad(way)) +
-    weights.reported * Number(reports.some(report => report.impact === 'difficult')))
+    weights.reported * Number(reports.some(report => report.impact !== 'passable')))
 }
 
 function makeGraph(network: RoutingNetwork, edges: Edge[], a: Snap, b: Snap) {
@@ -244,14 +247,6 @@ function selectCandidates(graphData: ReturnType<typeof makeGraph>, preference: P
   return candidates
 }
 
-const highwayLabels: Record<string, string> = {
-  footway: '步道', path: '小徑', pedestrian: '行人通道', living_street: '生活街道',
-  service: '服務道路', track: '通道', cycleway: '共用道路',
-}
-export function roadName(way: RoadWay) {
-  return way.name ?? (way.crossing ? '行穿線' : highwayLabels[way.highway] ?? '道路')
-}
-
 const surfaceLabels: Record<string, string> = {
   asphalt: '柏油', paved: '鋪面', concrete: '混凝土', 'concrete:plates': '混凝土板',
   paving_stones: '地磚', sett: '石塊鋪面', cobblestone: '卵石鋪面', gravel: '碎石',
@@ -264,7 +259,7 @@ const smoothnessLabels: Record<string, string> = {
 }
 export function surfaceLabel(surface: string | null) { return surface ? surfaceLabels[surface] ?? surface : '未知' }
 export function smoothnessLabel(value: string | null) { return value ? smoothnessLabels[value] ?? value : '未知' }
-export const reportSummary = (report: CommunityReport) => `${categories[report.category]}${report.impact === 'difficult' ? '（通行困難）' : ''}`
+export const reportSummary = (report: CommunityReport) => `${categories[report.category]}${report.impact === 'passable' ? '' : `（回報${impacts[report.impact]}）`}`
 
 function isSharedLine(a: Coordinate, b: Coordinate, line: Coordinate[]) {
   return line.slice(1).some((end, i) => {

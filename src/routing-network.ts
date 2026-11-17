@@ -31,6 +31,15 @@ export interface RoutingNetwork {
   ways: RoadWay[]
 }
 
+const highwayLabels: Record<string, string> = {
+  footway: '步道', path: '小徑', pedestrian: '行人通道', living_street: '生活街道',
+  service: '服務道路', track: '通道', cycleway: '共用道路',
+}
+
+export function roadName(way: RoadWay) {
+  return way.name ?? (way.crossing ? '行穿線' : highwayLabels[way.highway] ?? '道路')
+}
+
 export function isCoordinate(value: unknown): value is Coordinate {
   return Array.isArray(value) && value.length === 2 && value.every(Number.isFinite) &&
     Math.abs(value[0]) <= 180 && Math.abs(value[1]) <= 90

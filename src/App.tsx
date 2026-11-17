@@ -17,6 +17,9 @@ import type { SheetSize } from './MapSheet'
 import RouteExplorer from './RouteExplorer'
 import { useMediaQuery, useRouteTour } from './useRouteTour'
 import { CommunityDialog, CommunitySection } from './Community'
+import type { CommunityIntent } from './Community'
+import { isRoadReportId, roadReportId } from './community-model'
+import { indexReportableRoads, nearestReportRoad } from './community-roads'
 import { useCommunity } from './useCommunity'
 import { usePlaceCatalog } from './usePlaceCatalog'
 import { categoryLabels, clearRecentPlaces, findPlaces, placeEndpointPatch, readRecentPlaces, rememberPlace } from './places'
@@ -29,7 +32,8 @@ import PlannerDraftDialog from './PlannerDraftDialog'
 import { initialPlan, planEndpoint } from './planning-params'
 import type { EndpointSlot, PlanEndpoint, PlanRequest } from './planning-params'
 import { planRoutes, reportSummary, surfaceLabel } from './routing-plan'
-import type { PlannedRoute } from './routing-plan'
+import type { PlannedLeg, PlannedRoute } from './routing-plan'
+import { inRoutingBounds } from './routing-network'
 import type { TourRoute } from './route-tour'
 import { useRoutingNetwork } from './useRoutingNetwork'
 import { conditionDataReady, validateReportPoint } from './road-conditions'
@@ -158,7 +162,10 @@ export default function App() {
   const [undoFavorites, setUndoFavorites] = useState<Favorite[] | null>(null)
   const [sheetSize, setSheetSize] = useState<SheetSize>(() => defaultSheetSize(state))
   const [communityOpen, setCommunityOpen] = useState(false)
-  const [communitySegment, setCommunitySegment] = useState('')
+  const [communityIntent, setCommunityIntent] = useState<CommunityIntent>({ segmentId: '' })
+  const [communityPicking, setCommunityPicking] = useState(false)
+  const [communityPickError, setCommunityPickError] = useState('')
+  const reportSheet = useRef<SheetSize>('half')
   const [communityFocus, setCommunityFocus] = useState<{ coordinate: Coordinate; request: number }>()
   const [plannerPicking, setPlannerPicking] = useState<EndpointSlot | 'observation' | null>(null)
   const [plannerPickError, setPlannerPickError] = useState('')
@@ -184,11 +191,21 @@ export default function App() {
   const routes = useMemo(buildWalkedRoutes, [])
   const planning = state.screen === 'plan'
   const plan = state.plan ?? initialPlan
-  const routing = useRoutingNetwork(planning)
+  const routing = useRoutingNetwork(planning || communityOpen || communityPicking)
   const communitySegments = useMemo(() => routes.flatMap(route => route.segments.map(segment => ({
     id: segment.id, name: segment.name, routeName: route.name, coordinate: lineMidpoint(segment.coordinates),
     coordinates: segment.approximate ? undefined : segment.coordinates, approximate: segment.approximate,
   }))), [routes])
+  const reportRoads = useMemo(() => routing.network ? indexReportableRoads(routing.network) : undefined, [routing.network])
+  const reportSegments = useMemo(() => {
+    const targets = new Map([...community.reports.map(report => [report.segmentId, report.coordinate] as const),
+      [communityIntent.segmentId, communityIntent.coordinate] as const])
+    return [...communitySegments, ...[...targets].flatMap(([id, point]) => {
+      const fragments = reportRoads?.get(id)
+      if (!fragments) return []
+      return (point ? nearestReportRoad(point, [fragments])?.road ?? fragments[0] : fragments[0])
+    })]
+  }, [communitySegments, community.reports, communityIntent, reportRoads])
   const fieldPoints = useMemo(() =>
     [...new Set(routes.flatMap(route => route.segments.flatMap(segment => segment.fieldPointIds ?? [])))]
       .flatMap(id => fieldObservation(id) ?? []), [routes])
@@ -247,6 +264,7 @@ export default function App() {
         if (next.screen !== state.screen || !next.category) setFieldGroup(undefined)
         if (next.screen !== state.screen) {
           setPlannerPicking(null)
+          setCommunityPicking(false)
           setDraftRoute(undefined)
           setDraftCoordinate(undefined)
           setPlaceQuery('')
@@ -284,6 +302,7 @@ export default function App() {
     const next = publicNavigation({ ...state, ...(patch.screen ? { placeId: undefined, category: undefined } : {}), ...patch })
     if (patch.screen) {
       setPlannerPicking(null)
+      setCommunityPicking(false)
       if (patch.screen !== 'plan') {
         setDraftRoute(undefined)
         setDraftCoordinate(undefined)
@@ -407,8 +426,43 @@ export default function App() {
       requestAnimationFrame(() => panelRef.current?.querySelector<HTMLButtonElement>('.sheet-collapsed .tour-play')?.focus({ preventScroll: true }))
     }
   }
-  const openCommunity = (segmentId = '') => { tour.pause(); setCommunitySegment(segmentId); setCommunityOpen(true) }
+  const openCommunity = (segmentId = '', coordinate?: Coordinate | null, compose = false) => {
+    tour.pause()
+    setCommunityIntent({ segmentId, coordinate, compose })
+    setCommunityOpen(true)
+  }
+  const openPlannedReport = (leg: PlannedLeg) => openCommunity(roadReportId(leg.way.osmId), lineMidpoint(leg.coordinates), true)
+  const beginCommunityPick = () => {
+    if (!reportRoads) return
+    tour.pause()
+    reportSheet.current = sheetSize
+    if (!mapScreen) showDirections()
+    setCommunityOpen(false)
+    setCommunityPickError('')
+    setCommunityPicking(true)
+    if (mobile) setSheetSize('map')
+  }
+  const finishCommunityPick = () => {
+    setCommunityPicking(false)
+    setCommunityPickError('')
+    if (mobile) setSheetSize(reportSheet.current)
+  }
+  const commitCommunityPick = (point: Coordinate) => {
+    const match = reportRoads && routing.network && inRoutingBounds(point, routing.network.bounds) && nearestReportRoad(point, reportRoads.values())
+    if (!match) { setCommunityPickError('附近找不到可標記的道路。請試著點更靠近步道的位置。'); return }
+    finishCommunityPick()
+    openCommunity(match.road.id, match.coordinate, true)
+  }
+  const cancelCommunityPick = () => { finishCommunityPick(); setCommunityOpen(true) }
   const inspectCommunitySegment = (id: string, coordinate?: Coordinate | null) => {
+    if (isRoadReportId(id) && coordinate) {
+      tour.pause()
+      if (!mapScreen) showDirections()
+      else navigate({ mapTheme: 'routes' })
+      setCommunityFocus(previous => ({ coordinate, request: (previous?.request ?? 0) + 1 }))
+      if (mobile) setSheetSize('map')
+      return true
+    }
     const route = routes.find(item => item.segments.some(segment => segment.id === id))
     if (!route) return false
     tour.pause()
@@ -521,9 +575,9 @@ export default function App() {
         {loading ? <><LoaderCircle className="spinner" size={28} /><h1>載入校園路線</h1></>
           : loadError && <><TriangleAlert size={32} /><h1>地圖資料暫時無法載入</h1><button className="button primary" onClick={retryCampus}>重新載入</button></>}
       </main>
-      : <main className={`workspace route-workspace ${catalog && !planning ? 'has-discovery' : ''}`} data-discovering={discovering} data-has-place={!!selectedPlace} data-sheet={sheetSize} data-screen={state.screen} data-planner-picking={!!plannerPicking}>
+      : <main className={`workspace route-workspace ${catalog && !planning ? 'has-discovery' : ''}`} data-discovering={discovering} data-has-place={!!selectedPlace} data-sheet={sheetSize} data-screen={state.screen} data-planner-picking={!!plannerPicking || communityPicking}>
       <MapSheet label={discovering ? '地點資訊' : planning ? '路線規劃' : state.screen === 'compare' ? '示範路線' : '路線資訊'} size={sheetSize} onSize={setSheetSize}
-        showControls={!plannerPicking && (state.screen !== 'compare' || discovering || sheetSize !== 'map')} mobile={mobile} panelRef={panelRef} collapsed={collapsed}>
+        showControls={!plannerPicking && !communityPicking && (state.screen !== 'compare' || discovering || sheetSize !== 'map')} mobile={mobile} panelRef={panelRef} collapsed={collapsed}>
         <div className="panel-main" key={state.screen}>
           {placeFeedback && <p className="place-endpoint-feedback" role="status">{placeFeedback}</p>}
           {discovering && catalog && (selectedPlace ? <>
@@ -549,7 +603,7 @@ export default function App() {
               onSwap={() => changePlan({ ...plan, start: plan.end, end: plan.start })}
               onPreference={preference => changePlan({ ...plan, preference })}
               onCandidate={selectPlannedRoute} onLeg={selectPlannedLeg} onField={choosePlaceById}
-              onBack={showDirections} onCopy={copyLink} onSave={savePlanned} onReport={openCommunity} onRetry={routing.retry}
+              onBack={showDirections} onCopy={copyLink} onSave={savePlanned} onReport={openCommunity} onReportLeg={openPlannedReport} onRetry={routing.retry}
               onDraft={() => { tour.pause(); setDraftCoordinate(undefined); setDraftRoute(planned) }}
               preview={plannedTour && <details className="planner-details" onToggle={event => { if (!event.currentTarget.open && sheetSize !== 'map') tour.pause() }}>
                 <summary>路線預演<ChevronDown size={15} aria-hidden="true" /></summary>
@@ -596,7 +650,7 @@ export default function App() {
                 </div>
                 <details className="mvp-route-reports">
                   <summary>這一段的使用者回報</summary>
-                  <CommunitySection data={community} segmentId={activeSegment.id} onOpen={() => openCommunity(activeSegment.id)} onOpenPhoto={tour.pause} />
+                  <CommunitySection data={community} segmentId={activeSegment.id} onOpen={() => openCommunity(activeSegment.id, null, true)} onOpenPhoto={tour.pause} />
                 </details>
               </>}
 
@@ -615,7 +669,7 @@ export default function App() {
         </div>
       </MapSheet>
 
-      {catalog && !planning && <PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces}
+      {catalog && !planning && !communityPicking && <PlaceSearch places={catalog.places} query={placeQuery} category={state.category} selected={selectedPlace} recent={recentPlaces}
         onQuery={value => {
           if (value.trim()) rememberRouteView()
           tour.pause(); setFieldGroup(undefined); setBrowsingPlaces(false); setPlaceQuery(value)
@@ -639,7 +693,8 @@ export default function App() {
         communityFocus={communityFocus} catalogPlaces={catalog?.places} catalogCategory={state.category} catalogQuery={placeQuery}
         selectedPlaceId={state.placeId} discoveryActive={discovering} onSelectPlace={choosePlaceById} fieldGroupIds={fieldGroup?.ids}
         onSelectFieldGroup={chooseFieldGroup} onReturnRoutes={clearDiscovery} communityReports={community.reports}
-        communitySegments={communitySegments} onSelectCommunity={openCommunity}
+        communitySegments={reportSegments} onSelectCommunity={openCommunity}
+        communityPicker={communityPicking ? { error: communityPickError, onPick: commitCommunityPick, onCancel: cancelCommunityPick } : undefined}
         mapObscured={mobile && sheetSize === 'full'}
         planner={planning ? {
           plan, routes: plannedRoutes, selectedId: planned?.id, legId: plannerLegId,
@@ -656,7 +711,10 @@ export default function App() {
     </main>}
     <OfflineStatus />
     {showSources && campus && <SourceDialog campus={{ ...campus, sources: [...campus.sources, ...(catalog?.sources.filter(source => source.id === 'osm-amenities') ?? [])] }} onClose={() => setShowSources(false)} />}
-    {campus && <CommunityDialog open={communityOpen} onClose={() => setCommunityOpen(false)} data={community} segments={communitySegments} initialSegment={communitySegment} onInspect={inspectCommunitySegment} onOpenPhoto={tour.pause} />}
+    {campus && <CommunityDialog open={communityOpen} onClose={() => setCommunityOpen(false)} data={community}
+      segments={reportSegments} practiceSegments={communitySegments} intent={communityIntent}
+      mapReady={!!reportRoads} mapError={routing.error} onMapRetry={routing.retry} onMapPick={beginCommunityPick}
+      onInspect={inspectCommunitySegment} onOpenPhoto={tour.pause} />}
     {planning && draftRoute && plan.start && plan.end && <PlannerDraftDialog key={draftRoute.id} route={draftRoute}
       start={plan.start} end={plan.end} activeLegId={plannedLeg?.id} open={plannerPicking !== 'observation'}
       pickedPoint={draftCoordinate} pickedLegId={draftLegId} onPick={legId => {

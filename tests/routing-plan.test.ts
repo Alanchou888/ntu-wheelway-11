@@ -146,6 +146,20 @@ describe('outdoor routing', () => {
     expect(indoors.status === 'ok' && indoors.routes[0].coordinates).toEqual([a, junction, b])
   })
 
+  it('warns about a new road closure until a second user confirms, then avoids only the matched way', () => {
+    const data = network([road(1, [0, 1, 2]), road(2, [0, 3, 2])])
+    const closure = report({ segmentId: 'osm-1' })
+    const unconfirmed = planRoutes(data, a, b, 'short', { now, reports: [closure] })
+    if (unconfirmed.status !== 'ok') throw new Error(unconfirmed.status)
+    expect(unconfirmed.routes[0].coordinates).toEqual([a, junction, b])
+    expect(unconfirmed.routes[0].reports).toContainEqual(closure)
+    const confirmed = { ...closure, counts: { exists: 1, resolved: 0, different: 0 } }
+    const alternative = planRoutes(data, a, b, 'short', { now, reports: [confirmed] })
+    expect(alternative.status === 'ok' && alternative.routes[0].coordinates).toEqual([a, north, b])
+    const unrelated = planRoutes(data, a, b, 'short', { now, reports: [{ ...confirmed, segmentId: 'osm-99' }] })
+    expect(unrelated.status === 'ok' && unrelated.routes[0].coordinates).toEqual([a, junction, b])
+  })
+
   it('finds real alternatives around NTU from the checked-in snapshot in both directions', () => {
     const data = parseRoutingNetwork(JSON.parse(readFileSync('public/data/routing-network.json', 'utf8')))
     const [out] = buildWalkedRoutes()

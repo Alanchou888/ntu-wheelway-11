@@ -1,11 +1,13 @@
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
-import { reactions, validateReport } from '../src/community-model'
+import { isRoadReportId, parseReportMeasurements, reactions, validateReport } from '../src/community-model'
 import type { CommunityReport, Reaction } from '../src/community-model'
+import { nearestReportRoad } from '../src/community-roads'
+import type { ReportableRoad } from '../src/community-roads'
 import type { Coordinate } from '../src/types'
 import { validateReportPoint } from '../src/road-conditions'
 
 export interface CommunityEnv { DB: D1Database; BUCKET: R2Bucket; COMMUNITY_ADMIN_TOKEN?: string }
-type Row = { id: string; segment_id: string; category: CommunityReport['category']; impact: CommunityReport['impact']; message: string; author_name: string; author_key: string; observed_at: string; created_at: string; photo_key: string | null; status: string; longitude: number | null; latitude: number | null }
+type Row = { id: string; segment_id: string; category: CommunityReport['category']; impact: CommunityReport['impact']; message: string; author_name: string; author_key: string; observed_at: string; created_at: string; photo_key: string | null; status: string; longitude: number | null; latitude: number | null; measurements: string | null }
 type Vote = { report_id: string; reaction: Reaction; note: string; name: string; created_at: string }
 export const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
 class ApiError extends Error { constructor(message: string, public status = 400) { super(message) } }
@@ -54,6 +56,10 @@ async function rowFor(env: CommunityEnv, id: string) {
   if (!row) throw new ApiError('這則回報已撤回或暫時無法查看。', 404)
   return row
 }
+function storedMeasurements(value: string | null) {
+  try { return value ? parseReportMeasurements(JSON.parse(value)) : null }
+  catch { return null }
+}
 async function reports(env: CommunityEnv, actor: string | null, admin = false) {
   const subset=`SELECT id FROM community_reports ${admin ? '' : "WHERE status = 'visible'"} ORDER BY created_at DESC, id DESC LIMIT 300`
   const result = await env.DB.prepare(`SELECT * FROM community_reports ${admin ? '' : "WHERE status = 'visible'"} ORDER BY created_at DESC, id DESC LIMIT 301`).all<Row>()
@@ -71,6 +77,7 @@ async function reports(env: CommunityEnv, actor: string | null, admin = false) {
     const total=totals.results.find(t=>t.report_id===row.id)
     return { id: row.id, segmentId: row.segment_id, category: row.category, impact: row.impact, message: row.message, authorName: row.author_name, observedAt: row.observed_at, createdAt: row.created_at,
       coordinate: row.longitude !== null && row.latitude !== null ? [row.longitude, row.latitude] : null,
+      measurements: storedMeasurements(row.measurements),
       photoUrl: row.photo_key ? `/api/community/photos/${row.id}` : null, own: actor === row.author_key,
       counts: { exists: total?.exists_count??0, resolved: total?.resolved_count??0, different: total?.different_count??0 },
       lastExistsAt: total?.last_exists??null, lastResolvedAt: total?.last_resolved??null, lastDifferentAt: total?.last_different??null, myReaction: total?.my_reaction??null,
@@ -80,7 +87,8 @@ async function reports(env: CommunityEnv, actor: string | null, admin = false) {
   }) }
 }
 
-export async function communityApi(request: Request, env: CommunityEnv, segmentIds: ReadonlySet<string>, segmentLines?: ReadonlyMap<string, Coordinate[]>): Promise<Response> {
+export async function communityApi(request: Request, env: CommunityEnv, segmentIds: ReadonlySet<string>, segmentLines?: ReadonlyMap<string, Coordinate[]>,
+    roadIndex?: ReadonlyMap<string, ReportableRoad[]>): Promise<Response> {
   try {
     const path = new URL(request.url).pathname.replace(/\/$/, '')
     const method = request.method
@@ -115,14 +123,34 @@ export async function communityApi(request: Request, env: CommunityEnv, segmentI
     if (path === '/api/community/reports' && method === 'POST') {
       const payload = await body(request)
       let input: ReturnType<typeof validateReport>
-      try { input = validateReport(payload, segmentIds); validateReportPoint(input.coordinate, segmentLines?.get(input.segmentId)) }
+      const targetId = typeof payload.segmentId === 'string' ? payload.segmentId : ''
+      const osmRoad = isRoadReportId(targetId)
+      const roads = osmRoad ? roadIndex?.get(targetId) : undefined
+      try {
+        if (osmRoad && !roads) throw new Error('校園路網找不到這段道路，請重新選點。')
+        input = validateReport(payload, roads ? new Set([targetId]) : segmentIds)
+        if (roads) {
+          const match = input.coordinate && nearestReportRoad(input.coordinate, [roads])
+          if (!match) throw new Error('請在所選道路附近標記看到路況的位置。')
+          input.coordinate = match.coordinate
+        } else validateReportPoint(input.coordinate, segmentLines?.get(input.segmentId))
+      }
       catch (error) { throw new ApiError(error instanceof Error ? error.message : '請檢查回報內容。') }
       await rate(env,actor,'report',10)
-      const duplicate = await env.DB.prepare("SELECT id FROM community_reports WHERE author_key = ? AND segment_id = ? AND category = ? AND status = 'visible' AND created_at > ?").bind(actor,input.segmentId,input.category,new Date(Date.now()-300_000).toISOString()).first()
-      if (duplicate) throw new ApiError('你剛剛已回報這類路況，請先查看原回報。',409)
-      const id = crypto.randomUUID()
-      await env.DB.prepare('INSERT INTO community_reports (id, segment_id, category, impact, message, author_name, author_key, observed_at, created_at, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id,input.segmentId,input.category,input.impact,input.message,input.authorName,actor,input.observedAt,new Date().toISOString(),input.coordinate?.[0]??null,input.coordinate?.[1]??null).run()
-      return json({ id },201)
+      const id = crypto.randomUUID(), now = Date.now()
+      const [longitude, latitude] = input.coordinate?.map(n => Number(n.toFixed(6))) ?? [null, null]
+      const exactRoadPoint = roads ? 'AND abs(longitude - ?) <= 0.00012 AND abs(latitude - ?) <= 0.00011' : ''
+      const inserted = await env.DB.prepare(`INSERT INTO community_reports
+          (id, segment_id, category, impact, message, author_name, author_key, observed_at, created_at, longitude, latitude, measurements)
+          SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          WHERE NOT EXISTS (SELECT id FROM community_reports WHERE author_key = ? AND segment_id = ? AND category = ?
+            AND status = 'visible' AND created_at > ? ${exactRoadPoint}) RETURNING id`)
+        .bind(id, input.segmentId, input.category, input.impact, input.message, input.authorName, actor, input.observedAt, new Date(now).toISOString(),
+          longitude, latitude, input.measurements ? JSON.stringify(input.measurements) : null,
+          actor, input.segmentId, input.category, new Date(now - 300_000).toISOString(), ...(roads ? [longitude, latitude] : []))
+        .first<{ id: string }>()
+      if (!inserted) throw new ApiError('你剛剛已回報這類路況，請先查看原回報。',409)
+      return json(inserted,201)
     }
     const match = path.match(/^\/api\/community\/reports\/([a-f0-9-]{36})(?:\/(reaction|flag|photo))?$/)
     if (!match) throw new ApiError('找不到此回報。',404)

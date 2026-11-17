@@ -3,8 +3,11 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { communityApi, imageType } from '../server/community'
 import type { CommunityEnv } from '../server/community'
-import { communitySummary, reportState, validateReport } from '../src/community-model'
+import { communitySummary, excludesPlannedRoad, needsReportCheck, reportState, validateReport } from '../src/community-model'
 import type { CommunityReport } from '../src/community-model'
+import { addPracticeReport, recordPracticeReaction, sampleCommunityReports } from '../src/community-practice'
+import { indexReportableRoads } from '../src/community-roads'
+import type { RoadWay, RoutingNetwork } from '../src/routing-network'
 import type { Coordinate } from '../src/types'
 
 const ids=new Set(['gentle-1','direct-2'])
@@ -144,6 +147,78 @@ describe('community confirmations and moderation',()=>{
     }
     expect((await call('reports','POST',input())).status).toBe(429)
     expect((await call('reports','POST',input(),'test-b')).status).toBe(201)
+  })
+})
+
+describe('reports on the campus road network', () => {
+  const road: RoadWay = {
+    osmId: 101, nodes: [0, 1], direction: 3, highway: 'footway', name: '測試步道',
+    surface: null, smoothness: null, wheelchair: null, inclinePercent: null, widthM: null,
+    crossing: false, ramp: false, separateLevel: false,
+  }
+  const network: RoutingNetwork = {
+    version: 1, sourceUrl: 'https://example.test/network', license: 'ODbL-1.0',
+    retrievedAt: '2026-11-17T00:00:00.000Z', dataAsOf: null, bounds: [121.53, 25.01, 121.55, 25.03],
+    nodes: [[121.538, 25.018], [121.539, 25.018], [121.538, 25.0184], [121.539, 25.0184]],
+    ways: [road, { ...road, osmId: 102, nodes: [2, 3], separateLevel: true }],
+  }
+  const roads = indexReportableRoads(network)
+  const observed = { segmentId: 'osm-101', category: 'curb', impact: 'blocked', coordinate: [121.53813, 25.01804],
+    measurements: { widthCm: 85.5, stepCm: 2.5, slopePercent: 0, surface: '地磚' } }
+  const createRoad = (patch: object = {}, actor: string | null = 'test-a') =>
+    communityApi(request('reports', 'POST', { ...input(), ...observed, ...patch }, actor), env, ids, undefined, roads)
+
+  it('shares a snapped point and optional single-point measurements, then another user confirms', async () => {
+    const response = await createRoad()
+    expect(response.status).toBe(201)
+    const { id } = await response.json()
+    const [report] = await list('test-b')
+    expect(report).toMatchObject({ id, segmentId: 'osm-101', coordinate: [121.53813, 25.018],
+      measurements: observed.measurements, own: false })
+    expect(needsReportCheck(report)).toBe(true)
+    expect(excludesPlannedRoad(report)).toBe(false)
+    expect((await call(`reports/${id}/reaction`, 'POST', { reaction: 'exists' }, 'test-b')).status).toBe(200)
+    const [confirmed] = await list(null)
+    expect(needsReportCheck(confirmed)).toBe(false)
+    expect(excludesPlannedRoad(confirmed)).toBe(true)
+    expect(confirmed).not.toHaveProperty('verifiedAt')
+    expect((await call(`reports/${id}/reaction`, 'POST', { reaction: 'different' }, 'test-b')).status).toBe(200)
+    expect(needsReportCheck((await list(null))[0])).toBe(true)
+  })
+
+  it('rejects missing or far-away points, unknown and elevated roads, and invalid measurements', async () => {
+    for (const patch of [
+      { coordinate: null }, { coordinate: [121.53813, 25.020] }, { segmentId: 'osm-999' },
+      { segmentId: 'osm-102', coordinate: [121.53813, 25.0184] }, { measurements: { widthCm: '85' } },
+      { measurements: { slopePercent: '5°' } }, { measurements: { stepCm: -5 } }, { measurements: { surface: 'a'.repeat(41) } },
+    ]) expect((await createRoad(patch)).status).toBe(400)
+    expect(await list(null)).toHaveLength(0)
+    expect((await createRoad({}, null)).status).toBe(401)
+  })
+
+  it('keeps nearby duplicate submissions from overwriting each other and allows a different part of the same road', async () => {
+    const copies = await Promise.all([createRoad(), createRoad({ coordinate: [121.53814, 25.018] })])
+    expect(copies.map(response => response.status).sort()).toEqual([201, 409])
+    expect((await createRoad({ coordinate: [121.53872, 25.018], measurements: null })).status).toBe(201)
+    expect(await list(null)).toHaveLength(2)
+    expect((await list(null)).find(report => report.coordinate?.[0] === 121.53872)?.measurements).toBeNull()
+  })
+
+  it('creates local practice records with separate IDs and models vote replacement', () => {
+    const now = Date.now(), point: Coordinate = [121.538, 25.018]
+    const sections = ['walk-out-4', 'walk-back-3', 'walk-back-2'].map(id => ({ id, name: id, routeName: '示範路線', coordinate: point }))
+    const reports = sampleCommunityReports(sections, now)
+    expect(reports).toHaveLength(3)
+    expect(reports.every(report => report.id.startsWith('practice-') && report.photoUrl === null)).toBe(true)
+    expect(reportState(reports[2], now).kind).toBe('stale')
+    const confirmed = recordPracticeReaction(reports[0], 'exists', '', now)
+    const resolved = recordPracticeReaction(confirmed, 'resolved', '練習備註', now + 1000)
+    expect(resolved.counts).toEqual({ exists: 0, resolved: 1, different: 0 })
+    expect(reportState(resolved, now + 1000).kind).toBe('resolved')
+    expect(reports[0].counts.exists).toBe(0)
+    const submitted = addPracticeReport({ ...reports[0], message: '新增的虛擬資料' }, now)
+    expect(submitted.own).toBe(true)
+    expect(recordPracticeReaction(submitted, 'exists', '', now)).toBe(submitted)
   })
 })
 

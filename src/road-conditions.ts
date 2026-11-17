@@ -3,19 +3,27 @@ import { categories, reportState } from './community-model'
 import type { CommunityReport, CommunitySegment } from './community-model'
 
 // Coordinates are [longitude, latitude]. Local projection is sufficient for campus distances.
-export function distanceToLineM(point: Coordinate, line: Coordinate[]): number {
-  if (line.length < 2) return Infinity
+export function projectOntoLine(point: Coordinate, line: Coordinate[]): { coordinate: Coordinate; offsetM: number } {
   const xScale = 111_320 * Math.cos(point[1] * Math.PI / 180)
   const yScale = 111_320
-  let closest = Infinity
+  let offsetM = Infinity
+  let coordinate = point
   for (let i = 1; i < line.length; i++) {
     const a = [(line[i - 1][0] - point[0]) * xScale, (line[i - 1][1] - point[1]) * yScale]
     const b = [(line[i][0] - point[0]) * xScale, (line[i][1] - point[1]) * yScale]
     const dx = b[0] - a[0], dy = b[1] - a[1]
     const t = Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / (dx * dx + dy * dy || 1)))
-    closest = Math.min(closest, Math.hypot(a[0] + t * dx, a[1] + t * dy))
+    const offset = Math.hypot(a[0] + t * dx, a[1] + t * dy)
+    if (offset < offsetM) {
+      offsetM = offset
+      coordinate = [line[i - 1][0] + t * (line[i][0] - line[i - 1][0]), line[i - 1][1] + t * (line[i][1] - line[i - 1][1])]
+    }
   }
-  return closest
+  return { coordinate, offsetM }
+}
+
+export function distanceToLineM(point: Coordinate, line: Coordinate[]): number {
+  return projectOntoLine(point, line).offsetM
 }
 
 export function validateReportPoint(coordinate: Coordinate | null | undefined, line?: Coordinate[]): void {

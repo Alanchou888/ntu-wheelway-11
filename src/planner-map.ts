@@ -9,7 +9,7 @@ export interface PlannerMapOverlay {
   access?: [RoadAccess, RoadAccess]
   selectedId?: string
   legId?: string
-  picking: EndpointSlot | 'observation' | null
+  picking: EndpointSlot | 'observation' | 'report' | null
   observation?: Coordinate
   onPick: (coordinate: Coordinate) => void
   onRoute: (id: string) => void

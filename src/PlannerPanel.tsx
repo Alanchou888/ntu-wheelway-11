@@ -103,7 +103,7 @@ function EvidenceLinks({ ids, onField }: { ids: string[]; onField: (id: string) 
   </li>)}</ul> : null
 }
 
-function LegDetails({ leg, onReport }: { leg: PlannedLeg; onReport: (segmentId: string) => void }) {
+function LegDetails({ leg, onReport, onReportLeg }: { leg: PlannedLeg; onReport: (segmentId: string) => void; onReportLeg: (leg: PlannedLeg) => void }) {
   const { way } = leg
   return <div className="planner-leg" id="planner-leg-details">
     <div className="planner-leg-title"><strong>{leg.name}</strong><span>{formatDistance(leg.distanceM)}</span></div>
@@ -119,7 +119,9 @@ function LegDetails({ leg, onReport }: { leg: PlannedLeg; onReport: (segmentId: 
     {leg.reports.length > 0 && <ul className="planner-reports">{leg.reports.map(report =>
       <li key={report.id}><button type="button" onClick={() => onReport(report.segmentId)}>
         <strong>{reportSummary(report)}</strong><span>{report.message}</span>
+        <small>{report.counts.exists ? '有人確認仍存在' : '待他人確認'}</small>
       </button></li>)}</ul>}
+    {!way.separateLevel && <button type="button" className="community-link planner-leg-report" onClick={() => onReportLeg(leg)}>回報這一段</button>}
     <a href={`https://www.openstreetmap.org/way/${way.osmId}`} target="_blank" rel="noreferrer">查看這段的 OpenStreetMap 資料</a>
   </div>
 }
@@ -133,6 +135,7 @@ interface Props {
   onSwap: () => void; onPreference: (value: PlanningPreference) => void
   onCandidate: (id: string) => void; onLeg: (id: string) => void; onField: (id: string) => void
   onBack: () => void; onCopy: () => void; onSave: () => void; onReport: (segmentId: string) => void
+  onReportLeg: (leg: PlannedLeg) => void
   onRetry: () => void; onDraft: () => void; preview?: ReactNode
 }
 
@@ -181,7 +184,7 @@ export default function PlannerPanel(props: Props) {
               {selected.legs.map((leg, index) => <option key={leg.id} value={leg.id}>第 {index + 1} 段 · {leg.name} · {formatDistance(leg.distanceM)}</option>)}
             </select>
           </label>
-          {activeLeg && legIndex >= 0 && <LegDetails leg={activeLeg} onReport={props.onReport} />}
+          {activeLeg && legIndex >= 0 && <LegDetails leg={activeLeg} onReport={props.onReport} onReportLeg={props.onReportLeg} />}
         </details>
         {selected.fieldPointIds.length > 0 && <details className="planner-details">
           <summary>沿途實勘點與照片（{selected.fieldPointIds.length}）<ChevronDown size={15} aria-hidden="true" /></summary>

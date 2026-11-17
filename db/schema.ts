@@ -5,7 +5,7 @@ export const communityReports = sqliteTable('community_reports', {
   message: text('message').notNull(), authorName: text('author_name').notNull(), authorKey: text('author_key').notNull(),
   observedAt: text('observed_at').notNull(), createdAt: text('created_at').notNull(), photoKey: text('photo_key'),
   status: text('status').notNull().default('visible'),
-  longitude: real('longitude'), latitude: real('latitude'),
+  longitude: real('longitude'), latitude: real('latitude'), measurements: text('measurements'),
 }, table => [index('reports_segment_created').on(table.segmentId, table.createdAt), index('reports_author_created').on(table.authorKey, table.createdAt)])
 
 export const communityVotes = sqliteTable('community_votes', {
