@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, Check, Flag, LoaderCircle, LogIn, MapPin, MessageSquare, Plus, RefreshCw, Trash2, X } from 'lucide-react'
-import { categories, impacts, isRoadReportId, needsReportCheck, reactions, relativeTime, reportState, validateReport } from './community-model'
+import { categories, impacts, isRoadReportId, needsReportCheck, reactions, relativeTime, reportMeasurementLabels, reportState, validateReport } from './community-model'
 import type { CommunityReport, CommunitySegment, Reaction, ReportCategory, ReportImpact, ReportInput } from './community-model'
-import { addPracticeReport, recordPracticeReaction, sampleCommunityReports } from './community-practice'
+import { addPracticeReport, practiceWidthReportId, recordPracticeReaction, sampleCommunityReports } from './community-practice'
 import { communityRequest, prepareCommunityPhoto } from './useCommunity'
 import type { CommunityData } from './useCommunity'
 import PhotoGallery from './PhotoGallery'
@@ -49,19 +49,14 @@ function ReportCard({ report, data, segmentName, onOpenPhoto, practice, onSupple
     }catch(error){setFeedback(messageFor(error))}finally{setBusy(false)}
   }
   const begin=(next:typeof action)=>{setAction(next);setNote('');setFeedback('')}
-  return <article className="community-report">
+  return <article className="community-report" id={practice ? report.id : undefined} tabIndex={practice ? -1 : undefined}>
     <div className="community-report-heading"><strong>{practice && <small className="practice-pill">示範</small>}{categories[report.category]}</strong><span className={`report-impact ${report.impact}`}>{impacts[report.impact]}</span></div>
     {segmentName&&<p className="report-segment"><MapPin size={13}/>{segmentName}</p>}
     <p className="report-location-kind"><MapPin size={13} aria-hidden="true" />{practice ? '情境模擬' : report.coordinate ? '使用者標記位置' : '整段道路回報'}</p>
     <p className="report-message">{report.message}</p>
     {report.measurements && <div className="report-measurements">
       <small>{practice ? '示範單點量測' : '使用者單點量測'}</small>
-      <ul>{[
-        report.measurements.widthCm === null ? null : `淨寬 ${report.measurements.widthCm} 公分`,
-        report.measurements.stepCm === null ? null : `階差 ${report.measurements.stepCm} 公分`,
-        report.measurements.slopePercent === null ? null : `坡度 ${report.measurements.slopePercent}%`,
-        report.measurements.surface,
-      ].flatMap((value, index) => value ? [<li key={index}>{value}</li>] : [])}</ul>
+      <ul>{reportMeasurementLabels(report.measurements).map((value, index) => <li key={index}>{value}</li>)}</ul>
     </div>}
     {report.photoUrl&&<PhotoGallery photos={[{src:report.photoUrl,alt:`${categories[report.category]}的使用者照片`,caption:'使用者提供的現場照片'}]} onOpen={onOpenPhoto}/>}
     <div className="report-meta"><span>{report.authorName}{report.own?'（你）':''}</span><time dateTime={report.observedAt} title={new Date(report.observedAt).toLocaleString('zh-TW')}>{relativeTime(report.observedAt)}發現</time><span className={`report-state ${state.kind}`}>{state.label}</span></div>
@@ -178,6 +173,32 @@ function CommunityAdmin({data}:{data:CommunityData}) {
   const [loaded,setLoaded]=useState(false)
   const load=async()=>{try{const result=await communityRequest('admin',{headers:{Authorization:`Bearer ${token}`}});setReports(result.reports);setLoaded(true);setError('')}catch(e){setError(messageFor(e))}}
   return <details className="community-admin"><summary>內容管理</summary><form onSubmit={e=>{e.preventDefault();void load()}}><label>管理金鑰<input type="password" required value={token} onChange={e=>setToken(e.target.value)} autoComplete="off"/></label><button className="button secondary" type="submit">載入管理列表</button></form>{error&&<p role="alert">{error}</p>}{loaded&&<p>{reports.length} 則紀錄。作者撤回的內容無法重新公開。</p>}{reports.map(r=><article key={r.id}><strong>{categories[r.category]} · {r.status} · {r.flagCount} 則檢舉</strong><p>{r.message}</p>{r.flags?.map((flag,i)=><p key={i}>檢舉原因：{flag.reason}（{relativeTime(flag.at)}）</p>)}{r.status!=='withdrawn'&&<button className="button secondary" onClick={async()=>{try{await communityRequest(`admin/${r.id}`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:JSON.stringify({status:r.status==='visible'?'hidden':'visible'})});await load();await data.refresh()}catch(e){setError(messageFor(e))}}}>{r.status==='visible'?'隱藏回報':'恢復公開'}</button>}</article>)}</details>
+}
+
+function PracticeRouteComparison({ report, now }: { report?: CommunityReport; now: number }) {
+  const [minimum, setMinimum] = useState(90)
+  const state = report && reportState(report, now)
+  const width = state?.kind === 'active' ? report?.measurements?.widthCm : null
+  const widthStatus = (value?: number | null) => value == null ? '此處淨寬未知' : value < minimum ? '低於設定淨寬' : '此處符合設定淨寬'
+  return <details className="community-measure-fields practice-comparison">
+    <summary>練習比較兩條路線</summary>
+    <p>總圖到博雅的模擬情境。兩條路線各看一個通行點。</p>
+    <label>希望至少有多少淨寬
+      <select value={minimum} onChange={event => setMinimum(Number(event.target.value))}>
+        {[75, 90, 110, 130].map(value => <option key={value} value={value}>{value} 公分</option>)}
+      </select>
+    </label>
+    <ul aria-live="polite">
+      <li><strong>經廣場轉角 · 約 580 公尺</strong><p>{width == null ? widthStatus() : `回報單點淨寬 ${width} 公分 · ${widthStatus(width)}`}</p>
+        {state && <p>{state.label}</p>}</li>
+      <li><strong>繞行較寬步道 · 約 620 公尺</strong><p>模擬單點淨寬 120 公分 · {widthStatus(120)}</p></li>
+    </ul>
+    {report && <button type="button" className="community-link" onClick={() => {
+      const card = document.getElementById(practiceWidthReportId)
+      card?.focus({ preventScroll: true })
+      card?.scrollIntoView({ block: 'center' })
+    }}>前往核對轉角回報</button>}
+  </details>
 }
 
 interface CommunityDialogProps {
@@ -299,6 +320,7 @@ export function CommunityDialog({open,onClose,data,segments,practiceSegments,int
         <strong>示範資料</strong>
         <p>可練習回報和核對。這裡的路況是虛構情境，操作留在此頁。</p>
       </div>
+      <PracticeRouteComparison report={examples.find(report => report.id === practiceWidthReportId)} now={data.now} />
       <div className="community-contribute">
         <button type="button" className="button primary" onClick={() => { setPracticeDraft(true); scrollToForm() }}><Plus size={17} aria-hidden="true" />新增示範回報</button>
         <button type="button" className="button plain" onClick={() => {

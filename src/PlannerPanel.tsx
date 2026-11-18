@@ -2,6 +2,7 @@ import { useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ArrowDownUp, ArrowLeft, Bookmark, ChevronDown, Copy, MapPin, X } from 'lucide-react'
 import { fieldObservation } from './field-observations'
+import { reportMeasurementLabels } from './community-model'
 import { findPlaces } from './places'
 import { canPlanToPlace, planningPreferences } from './planning-params'
 import type { EndpointSlot, PlanEndpoint, PlanRequest, PlanningPreference } from './planning-params'
@@ -119,6 +120,7 @@ function LegDetails({ leg, onReport, onReportLeg }: { leg: PlannedLeg; onReport:
     {leg.reports.length > 0 && <ul className="planner-reports">{leg.reports.map(report =>
       <li key={report.id}><button type="button" onClick={() => onReport(report.segmentId)}>
         <strong>{reportSummary(report)}</strong><span>{report.message}</span>
+        {report.measurements && <span>使用者單點量測 · {reportMeasurementLabels(report.measurements).join(' · ')}</span>}
         <small>{report.counts.exists ? '有人確認仍存在' : '待他人確認'}</small>
       </button></li>)}</ul>}
     {!way.separateLevel && <button type="button" className="community-link planner-leg-report" onClick={() => onReportLeg(leg)}>回報這一段</button>}

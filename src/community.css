@@ -61,6 +61,12 @@
 .community-list-heading button[aria-pressed='true'] { background: #eaf2fd; border-color: #205db6; }
 .practice-banner { padding: 11px 13px; border: 1px solid #dfcca5; border-radius: 8px; background: #fff7e7; color: #654620; margin-bottom: 13px; }
 .practice-banner p { margin: 4px 0 0; font-size: 13px; }
+.practice-comparison { background: #f1f5f9; border-radius: 8px; padding: 0 12px 2px; margin-bottom: 12px; }
+.practice-comparison label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.practice-comparison select { min-height: 44px; padding: 4px 8px; font: inherit; }
+.practice-comparison ul { list-style: none; padding: 0; margin: 8px 0; }
+.practice-comparison li { padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.practice-comparison li p { margin: 4px 0 0; }
 .practice-pill { display: inline-block; margin-right: 6px; padding: 3px 6px; border-radius: 4px; background: #f7edd8; color: #654620; font-size: 11px; }
 .report-draft-road { display: flex; align-items: center; gap: 6px; color: #174785; font-weight: 600; }
 .community-measure-fields > summary { min-height: 44px; align-content: center; cursor: pointer; font-size: 14px; }

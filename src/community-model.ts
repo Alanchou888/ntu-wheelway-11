@@ -26,6 +26,16 @@ export interface ReportInput {
 }
 export interface CommunitySegment { id: string; name: string; routeName: string; coordinate: Coordinate; coordinates?: Coordinate[]; approximate?: boolean }
 export interface ReportMeasurements { widthCm: number | null; stepCm: number | null; slopePercent: number | null; surface: string | null }
+
+export function reportMeasurementLabels(measurements: ReportMeasurements) {
+  const { widthCm, stepCm, slopePercent, surface } = measurements
+  return [
+    widthCm === null ? null : `淨寬 ${widthCm} 公分`,
+    stepCm === null ? null : `階差 ${stepCm} 公分`,
+    slopePercent === null ? null : `坡度 ${slopePercent}%`,
+    surface,
+  ].filter((value): value is string => value !== null)
+}
 const hours: Record<ReportCategory, number> = {
   parking: 6, rough: 24 * 30, construction: 72, water: 12, traffic: 3, lighting: 24 * 7,
   curb: 24 * 30, narrow: 24 * 30, ramp: 24 * 30, other: 24,

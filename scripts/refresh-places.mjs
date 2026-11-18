@@ -107,6 +107,12 @@ export async function refreshPlaces({outputPath=placesPath,campusPath=resolve(ro
     }
   }
   const snapshot=buildPlaceCatalog(campus,amenities,source)
+  const rampSource=previous?.sources.find(item=>item.id==='taipei-public-ramps')
+  if(rampSource){
+    snapshot.sources.push(rampSource)
+    snapshot.places.push(...previous.places.filter(place=>place.sourceId===rampSource.id))
+    validatePlaceCatalog(snapshot)
+  }
   snapshot.amenitiesStatus=unavailable?'unavailable':cached?'cached':'ok'
   const temp=`${outputPath}.${process.pid}.tmp`
   try{await writeFile(temp,JSON.stringify(snapshot)+'\n','utf8');await rename(temp,outputPath)}finally{await rm(temp,{force:true}).catch(()=>{})}

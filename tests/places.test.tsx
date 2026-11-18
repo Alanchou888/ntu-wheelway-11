@@ -16,7 +16,11 @@ describe('campus place search and endpoints',()=>{
     for(const query of ['博雅','bOyA'])expect(findPlaces(catalog.places,query)[0].id).toBe('boya')
   })
   it('filters by category and keeps zero matches distinct from missing facilities',()=>{
-    expect(findPlaces(catalog.places,'','ramp')).toHaveLength(18)
+    const ramps = findPlaces(catalog.places, '', 'ramp')
+    expect(ramps.filter(place => place.sourceId === 'wheelroute')).toHaveLength(18)
+    const cityRamps = ramps.filter(place => place.sourceId === 'taipei-public-ramps')
+    expect(cityRamps).toHaveLength(6)
+    expect(cityRamps.every(place => place.widthM === null && place.slopePercent === null && place.verifiedAt === null)).toBe(true)
     expect(findPlaces(catalog.places,'','building').every(p=>p.category==='building')).toBe(true)
     expect(findPlaces(catalog.places,'this location does not exist')).toEqual([])
     for (const category of ['toilet', 'elevator', 'water', 'rest'] as const) {

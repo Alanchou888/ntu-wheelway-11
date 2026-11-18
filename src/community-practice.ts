@@ -1,5 +1,7 @@
 import type { CommunityReport, CommunitySegment, Reaction, ReportInput } from './community-model'
 
+export const practiceWidthReportId = 'practice-example-1'
+
 function practiceReport(id: string, input: ReportInput, now: number, own: boolean): CommunityReport {
   return { ...input, id: `practice-${id}`, own, createdAt: new Date(now).toISOString(), photoUrl: null,
     counts: { exists: 0, resolved: 0, different: 0 }, myReaction: null,
@@ -10,6 +12,7 @@ export function sampleCommunityReports(segments: CommunitySegment[], now: number
   const examples: { section: string; minutesAgo: number; report: Omit<ReportInput, 'segmentId' | 'authorName' | 'observedAt'> }[] = [
     { section: 'walk-out-4', minutesAgo: 40, report: {
       category: 'parking', impact: 'difficult', message: '廣場轉角停了幾輛腳踏車，轉彎時剩下的空間不多。',
+      measurements: { widthCm: 82, stepCm: null, slopePercent: null, surface: null },
     } },
     { section: 'walk-back-3', minutesAgo: 180, report: {
       category: 'rough', impact: 'difficult', message: '人行道有幾塊地磚翹起來，小輪經過時會晃動。',

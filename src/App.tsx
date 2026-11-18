@@ -710,7 +710,7 @@ export default function App() {
         onSelectSegment={id => { const route = routes.find(item => item.segments.some(segment => segment.id === id)); if (route) openRoute(route, id) }} />
     </main>}
     <OfflineStatus />
-    {showSources && campus && <SourceDialog campus={{ ...campus, sources: [...campus.sources, ...(catalog?.sources.filter(source => source.id === 'osm-amenities') ?? [])] }} onClose={() => setShowSources(false)} />}
+    {showSources && campus && <SourceDialog campus={{ ...campus, sources: [...campus.sources, ...(catalog?.sources.filter(source => source.id === 'osm-amenities' || source.id === 'taipei-public-ramps') ?? [])] }} onClose={() => setShowSources(false)} />}
     {campus && <CommunityDialog open={communityOpen} onClose={() => setCommunityOpen(false)} data={community}
       segments={reportSegments} practiceSegments={communitySegments} intent={communityIntent}
       mapReady={!!reportRoads} mapError={routing.error} onMapRetry={routing.retry} onMapPick={beginCommunityPick}
