@@ -8,6 +8,8 @@ import { fromHash } from '../src/routes'
 import { parseRoutingNetwork } from '../src/routing-network'
 import type { RoadWay, RoutingNetwork } from '../src/routing-network'
 import { planRoutes } from '../src/routing-plan'
+import type { PlannedLeg } from '../src/routing-plan'
+import { routeMeasurementRequests } from '../src/route-measurement-requests'
 import type { Coordinate } from '../src/types'
 import { buildWalkedRoutes } from '../src/walked-routes'
 
@@ -43,6 +45,22 @@ function report(patch: Partial<CommunityReport> = {}): CommunityReport {
 }
 
 describe('outdoor routing', () => {
+  it('prioritizes a ramp and a reported pinch point, and skips an already measured location', () => {
+    const leg = (way: RoadWay, distanceM: number, reports: CommunityReport[] = []): PlannedLeg => ({
+      id: String(way.osmId), name: '步道', way, coordinates: [a, b], distanceM,
+      teamSegmentNames: [], fieldPointIds: [], reports,
+    })
+    const measured = report({ segmentId: 'osm-1', measurements: { widthCm: 98, slopePercent: 0, stepCm: null, surface: null } })
+    const ramp = road(1, [0, 2], { ramp: true })
+    const narrow = leg(road(2, [0, 2], { wheelchair: 'limited' }), 25)
+    const ordinary = leg(road(3, [0, 2]), 100)
+    const tunnel = leg(road(4, [0, 2], { separateLevel: true }), 120)
+    const requests = routeMeasurementRequests([ordinary, narrow, tunnel, leg(ramp, 15)])
+    expect(requests.map(({leg, field}) => [leg.id, field])).toEqual([['1', 'slopePercent'], ['2', 'widthCm'], ['3', 'widthCm']])
+    expect(routeMeasurementRequests([leg(ramp, 20), leg(ramp, 15, [measured])])).toEqual([])
+    expect(routeMeasurementRequests([leg(ramp, 15, [{ ...measured, coordinate: north }])])).toHaveLength(1)
+  })
+
   it('snaps onto the real path, preserves bends and recalculates the reverse direction', () => {
     const data = network([road(1, [0, 3, 2])])
     const offRoad: Coordinate = [a[0], a[1] - .00008]

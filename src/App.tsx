@@ -18,6 +18,7 @@ import RouteExplorer from './RouteExplorer'
 import { useMediaQuery, useRouteTour } from './useRouteTour'
 import { CommunityDialog, CommunitySection } from './Community'
 import type { CommunityIntent } from './Community'
+import type { RequestedMeasurement } from './route-measurement-requests'
 import { isRoadReportId, roadReportId } from './community-model'
 import { indexReportableRoads, nearestReportRoad } from './community-roads'
 import { useCommunity } from './useCommunity'
@@ -426,12 +427,13 @@ export default function App() {
       requestAnimationFrame(() => panelRef.current?.querySelector<HTMLButtonElement>('.sheet-collapsed .tour-play')?.focus({ preventScroll: true }))
     }
   }
-  const openCommunity = (segmentId = '', coordinate?: Coordinate | null, compose = false) => {
+  const openCommunity = (segmentId = '', coordinate?: Coordinate | null, compose = false, measurement?: RequestedMeasurement) => {
     tour.pause()
-    setCommunityIntent({ segmentId, coordinate, compose })
+    setCommunityIntent({ segmentId, coordinate, compose, measurement })
     setCommunityOpen(true)
   }
-  const openPlannedReport = (leg: PlannedLeg) => openCommunity(roadReportId(leg.way.osmId), lineMidpoint(leg.coordinates), true)
+  const openPlannedReport = (leg: PlannedLeg, measurement?: RequestedMeasurement) =>
+    openCommunity(roadReportId(leg.way.osmId), lineMidpoint(leg.coordinates), true, measurement)
   const beginCommunityPick = () => {
     if (!reportRoads) return
     tour.pause()

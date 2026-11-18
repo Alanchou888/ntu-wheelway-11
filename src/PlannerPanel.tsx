@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { ArrowDownUp, ArrowLeft, Bookmark, ChevronDown, Copy, MapPin, X } from 'lucide-react'
 import { fieldObservation } from './field-observations'
 import { reportMeasurementLabels } from './community-model'
+import { measurementPrompts, routeMeasurementRequests } from './route-measurement-requests'
+import type { RequestedMeasurement } from './route-measurement-requests'
 import { findPlaces } from './places'
 import { canPlanToPlace, planningPreferences } from './planning-params'
 import type { EndpointSlot, PlanEndpoint, PlanRequest, PlanningPreference } from './planning-params'
@@ -137,13 +139,14 @@ interface Props {
   onSwap: () => void; onPreference: (value: PlanningPreference) => void
   onCandidate: (id: string) => void; onLeg: (id: string) => void; onField: (id: string) => void
   onBack: () => void; onCopy: () => void; onSave: () => void; onReport: (segmentId: string) => void
-  onReportLeg: (leg: PlannedLeg) => void
+  onReportLeg: (leg: PlannedLeg, field?: RequestedMeasurement) => void
   onRetry: () => void; onDraft: () => void; preview?: ReactNode
 }
 
 export default function PlannerPanel(props: Props) {
   const { plan, network, result, selected, activeLeg } = props
   const legIndex = activeLeg && selected ? selected.legs.indexOf(activeLeg) : -1
+  const requests = useMemo(() => selected ? routeMeasurementRequests(selected.legs) : [], [selected])
   const places = useMemo(() => props.places.filter(canPlanToPlace), [props.places])
   return <section className="planner-panel" aria-labelledby="panel-heading">
     <button className="back-link" type="button" onClick={props.onBack}><ArrowLeft size={16} aria-hidden="true" />返回地圖</button>
@@ -179,6 +182,14 @@ export default function PlannerPanel(props: Props) {
           {plan.preference === 'gentle' && result.routes.every(route => route.markedSlopeMax === null) && <p>這些路線都缺坡度資料，無法判斷哪條較平緩。</p>}
           {selected.teamM > 0 && <p>約 {formatDistance(selected.teamM)} 與團隊試走線重疊。</p>}
         </div>
+        {requests.length > 0 && <section className="planner-measurement-requests" aria-labelledby="planner-measurement-heading">
+          <h2 id="planner-measurement-heading">沿路待補資料</h2>
+          <p>如果你正好經過，可補上這一處的量測或現場觀察。</p>
+          <ul>{requests.map(({ leg, field, reason }) => <li key={leg.id} data-road-id={leg.way.osmId}>
+            <div><strong>第 {selected.legs.indexOf(leg) + 1} 段 · {leg.name}</strong><span>{reason}</span></div>
+            <button type="button" className="button secondary" onClick={() => props.onReportLeg(leg, field)}>{measurementPrompts[field]}</button>
+          </li>)}</ul>
+        </section>}
         <details className="planner-details" id="planner-leg-details-panel">
           <summary>逐段查看<ChevronDown size={15} aria-hidden="true" /></summary>
           <label className="planner-leg-select">路段

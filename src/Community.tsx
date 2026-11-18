@@ -8,13 +8,15 @@ import type { CommunityData } from './useCommunity'
 import PhotoGallery from './PhotoGallery'
 import ReportPointPicker from './ReportPointPicker'
 import type { Coordinate } from './types'
+import { measurementPrompts } from './route-measurement-requests'
+import type { RequestedMeasurement } from './route-measurement-requests'
 import { validateReportPoint } from './road-conditions'
 import './community.css'
 
 const messageFor = (error: unknown) => error instanceof Error ? error.message : '操作未完成，請稍後再試。'
 const localTime = () => { const date=new Date();return new Date(date.getTime()-date.getTimezoneOffset()*60_000).toISOString().slice(0,16) }
 export const signInHref = () => `/signin-with-chatgpt?return_to=${encodeURIComponent(location.pathname+location.search+location.hash)}`
-export interface CommunityIntent { segmentId: string; coordinate?: Coordinate | null; compose?: boolean }
+export interface CommunityIntent { segmentId: string; coordinate?: Coordinate | null; compose?: boolean; measurement?: RequestedMeasurement }
 
 type PracticeActions = { react: (reaction: Reaction, note: string) => void; withdraw: () => void }
 
@@ -100,8 +102,8 @@ function ReportForm({ data, segments, initial, onDone, active, practice }: {
   const segment = segments.find(item => item.id === segmentId)
   const [coordinate,setCoordinate]=useState<Coordinate|null>(initial.coordinate ?? null)
   const fixed = isRoadReportId(initial.segmentId)
-  const [category,setCategory]=useState<ReportCategory>('parking')
-  const [impact,setImpact]=useState<ReportImpact>('difficult')
+  const [category,setCategory]=useState<ReportCategory>(initial.measurement === 'slopePercent' ? 'ramp' : initial.measurement ? 'other' : 'parking')
+  const [impact,setImpact]=useState<ReportImpact | ''>(initial.measurement ? '' : 'difficult')
   const [message,setMessage]=useState('')
   const [authorName,setAuthorName]=useState('')
   const [observedAt,setObservedAt]=useState(localTime)
@@ -143,11 +145,11 @@ function ReportForm({ data, segments, initial, onDone, active, practice }: {
         : <label><span>路段</span><select required value={segmentId} onChange={e=>{setSegmentId(e.target.value);setCoordinate(null);setFeedback('')}}>{segments.filter(item => !isRoadReportId(item.id)).map(s=><option key={s.id} value={s.id}>{s.routeName}｜{s.name}</option>)}</select></label>}
       {segment?.approximate ? <p>館內走向約略，可用整段回報。</p>
         : <ReportPointPicker key={segmentId} segment={segment} coordinate={coordinate} onChange={setCoordinate} active={active&&!busy&&!pendingPhotoId} practice={!!practice} />}
-      <div className="community-field-pair"><label><span>問題類型</span><select value={category} onChange={e=>setCategory(e.target.value as ReportCategory)}>{Object.entries(categories).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label><span>通行影響</span><select value={impact} onChange={e=>setImpact(e.target.value as ReportImpact)}>{Object.entries(impacts).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></div>
+      <div className="community-field-pair"><label><span>問題類型</span><select value={category} onChange={e=>setCategory(e.target.value as ReportCategory)}>{Object.entries(categories).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label><span>通行影響</span><select required value={impact} onChange={e=>setImpact(e.target.value as ReportImpact)}>{initial.measurement && <option value="" disabled>請選擇現場情況</option>}{Object.entries(impacts).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></div>
       <label><span>路況說明</span><textarea required minLength={5} maxLength={500} rows={3} value={message} onChange={e=>setMessage(e.target.value)} placeholder="例如：轉角停了多輛腳踏車，推輪椅需要繞到旁邊。"/><small>{message.length} / 500 字</small></label>
-      <details className="community-measure-fields">
+      <details className="community-measure-fields" open={initial.measurement ? true : undefined}>
         <summary>補充單點量測（選填）</summary>
-        <p>填寫這個位置量到的數值。沒量到的欄位可留空。</p>
+        <p>{initial.measurement ? `這一處想請你${measurementPrompts[initial.measurement]}。請把地圖標記移到實際量測位置。` : '填寫這個位置量到的數值。'}沒量到的欄位可留空。</p>
         <div className="community-field-pair">
           <label>淨寬（公分）<input name="widthCm" type="number" min="1" max="5000" step="any" inputMode="decimal" /></label>
           <label>階差（公分）<input name="stepCm" type="number" min="0" max="150" step="any" inputMode="decimal" /></label>
