@@ -68,6 +68,8 @@
 .place-card-actions .button{padding:0 8px;font-size:12px;min-height:46px;gap:5px}
 .place-share{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid #bccbd8;border-radius:7px;background:#fff;color:#526b83;min-height:46px;font-size:10px}
 .place-card-actions button:disabled{opacity:.52;cursor:not-allowed}
+.place-external-map{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin:0 0 8px;color:#174785;font-size:14px;font-weight:600;text-underline-offset:3px}
+.place-external-map svg{flex:none}
 .place-route-scope{color:#80501a;background:#fff4e2;padding:11px 12px;line-height:1.9;font-size:12px;border-radius:6px}
 .place-route-scope.connected{color:#385777;background:#eff4fa}
 .place-copy-status{color:#205db6;font-size:12px;line-height:1.8;margin:8px 0}

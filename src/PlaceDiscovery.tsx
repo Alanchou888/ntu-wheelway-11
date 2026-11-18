@@ -127,6 +127,9 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onPla
   useEffect(()=>{heading.current?.focus({preventScroll:true})},[])
   const field=fieldObservation(place.id)
   const planHere = canPlanToPlace(place) ? onPlanEndpoint : undefined
+  const googleMapsQuery = ['building', 'landmark'].includes(place.category)
+    ? `${place.name}, ${place.address ?? '國立臺灣大學 臺北市大安區'}`
+    : null
   const angleSamples = field?.angles?.flatMap(reading => reading.degrees ?? []) ?? []
   const minAngle = Math.min(...angleSamples)
   const maxAngle = Math.max(...angleSamples)
@@ -191,6 +194,9 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onPla
       <button className="place-share" onClick={share}><Copy size={17} aria-hidden="true"/>分享</button>
     </div>
     {shareStatus}
+    {googleMapsQuery && <a className="place-external-map" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(googleMapsQuery)}`} target="_blank" rel="noreferrer">
+      <MapPin size={17} aria-hidden="true" />在 Google 地圖查看<ArrowUpRight size={15} aria-hidden="true" />
+    </a>}
     {place.routePlaceId&&<p className="place-route-scope connected">地圖上的館名標示建物中心，路線起終點另有標記。</p>}
     <dl className="place-facts">
       {place.note&&!place.routePlaceId&&<div><dt>位置</dt><dd>{place.note}</dd></div>}
