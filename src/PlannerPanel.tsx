@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ArrowDownUp, ArrowLeft, Bookmark, ChevronDown, Copy, MapPin, X } from 'lucide-react'
+import { ArrowDownUp, ArrowLeft, Bookmark, Camera, ChevronDown, Copy, List, MapPin, Ruler, X } from 'lucide-react'
 import { fieldObservation } from './field-observations'
 import { reportMeasurementLabels } from './community-model'
 import { measurementPrompts, routeMeasurementRequests } from './route-measurement-requests'
@@ -87,8 +87,11 @@ function RouteCards({ routes, selected, onChoose }: {
   return <ul className="planner-candidates" aria-label="候選路線">
     {routes.map((route, index) => <li key={route.id}>
       <button type="button" aria-pressed={route.id === selected.id} onClick={() => onChoose(route.id)}>
-        <span className="planner-candidate-title"><strong>路線 {index + 1}</strong>
-          <span>{formatDistance(route.distanceM)} · 約 {route.estimateMinutes} 分鐘</span></span>
+        <span className="planner-candidate-title">
+          <strong><span className={`legend-line ${route.id === selected.id ? 'planned' : 'alt'}`} aria-hidden="true" />路線 {index + 1}</strong>
+          {route.id === selected.id && <span className="planner-selected-label" aria-hidden="true">顯示中</span>}
+        </span>
+        <span className="planner-candidate-metrics"><strong>{formatDistance(route.distanceM)}</strong><span>約 {route.estimateMinutes} 分鐘</span></span>
         <small>{route.missingM > 0 ? `約 ${formatDistance(route.missingM)} 缺部分通行資料` : '有路面、坡度和路寬標記'}
           {route.roughM >= 1 && ` · 約 ${formatDistance(route.roughM)} 有粗糙鋪面或不平標記`}
           {route.reports.length > 0 && ` · ${route.reports.length} 則近期回報`}</small>
@@ -171,27 +174,25 @@ export default function PlannerPanel(props: Props) {
       : result.status !== 'ok' ? <p className="planner-message" role="alert">{failures[result.status]}</p> : selected && <>
         <h2>規劃結果</h2>
         <p className="planner-source-note">公開路網 · 團隊尚未查核全程</p>
+        {result.access.some(access => access.offsetM >= 2) && <p className="planner-source-note">距離從地圖上的路網接入點起算。</p>}
         <RouteCards routes={result.routes} selected={selected} onChoose={props.onCandidate} />
+        <h2>沿途路況</h2>
+        <dl className="planner-route-metrics">
+          <div><dt>已標最大坡度</dt><dd>{selected.markedSlopeMax === null ? '未知' : `${selected.markedSlopeMax}%`}</dd></div>
+          <div><dt>已標最窄路寬</dt><dd>{selected.markedWidthMin === null ? '未知' : `${selected.markedWidthMin} m`}</dd></div>
+        </dl>
         <div className="planner-route-notes">
-          {result.access.some(access => access.offsetM >= 2) && <p>
-            {result.access.map((access, i) => access.offsetM >= 2 ? `${i ? 'B' : 'A'} 接入點距選點 ${formatDistance(access.offsetM)}` : null).filter(Boolean).join('，')}。距離從圖上的路網接入點起算。
-          </p>}
-          <p>按 {estimateSpeedKmh} km/h 估算時間。路線排除圖資已標示的階梯與封閉。</p>
-          {props.reportsNote && <p>{props.reportsNote}</p>}
-          <p>已標坡度最大 {selected.markedSlopeMax === null ? '未知' : `${selected.markedSlopeMax}%`} · 已標最窄路寬 {selected.markedWidthMin === null ? '未知' : `${selected.markedWidthMin} m`}</p>
           {plan.preference === 'gentle' && result.routes.every(route => route.markedSlopeMax === null) && <p>這些路線都缺坡度資料，無法判斷哪條較平緩。</p>}
           {selected.teamM > 0 && <p>約 {formatDistance(selected.teamM)} 與團隊試走線重疊。</p>}
+          {props.reportsNote && <p>{props.reportsNote}</p>}
         </div>
-        {requests.length > 0 && <section className="planner-measurement-requests" aria-labelledby="planner-measurement-heading">
-          <h2 id="planner-measurement-heading">沿路待補資料</h2>
-          <p>如果你正好經過，可補上這一處的量測或現場觀察。</p>
-          <ul>{requests.map(({ leg, field, reason }) => <li key={leg.id} data-road-id={leg.way.osmId}>
-            <div><strong>第 {selected.legs.indexOf(leg) + 1} 段 · {leg.name}</strong><span>{reason}</span></div>
-            <button type="button" className="button secondary" onClick={() => props.onReportLeg(leg, field)}>{measurementPrompts[field]}</button>
-          </li>)}</ul>
-        </section>}
+        {selected.fieldPointIds.length > 0 && <details className="planner-details">
+          <summary><span><Camera size={16} aria-hidden="true" />沿途實勘點與照片（{selected.fieldPointIds.length}）</span><ChevronDown size={15} aria-hidden="true" /></summary>
+          <p className="planner-source-note">這些實勘點在路線附近，點開可看現場量測和照片。</p>
+          <EvidenceLinks ids={selected.fieldPointIds} onField={props.onField} />
+        </details>}
         <details className="planner-details" id="planner-leg-details-panel">
-          <summary>逐段查看<ChevronDown size={15} aria-hidden="true" /></summary>
+          <summary><span><List size={16} aria-hidden="true" />逐段查看</span><ChevronDown size={15} aria-hidden="true" /></summary>
           <label className="planner-leg-select">路段
             <select value={activeLeg?.id ?? ''} onChange={event => props.onLeg(event.target.value)}>
               {selected.legs.map((leg, index) => <option key={leg.id} value={leg.id}>第 {index + 1} 段 · {leg.name} · {formatDistance(leg.distanceM)}</option>)}
@@ -199,10 +200,13 @@ export default function PlannerPanel(props: Props) {
           </label>
           {activeLeg && legIndex >= 0 && <LegDetails leg={activeLeg} onReport={props.onReport} onReportLeg={props.onReportLeg} />}
         </details>
-        {selected.fieldPointIds.length > 0 && <details className="planner-details">
-          <summary>沿途實勘點與照片（{selected.fieldPointIds.length}）<ChevronDown size={15} aria-hidden="true" /></summary>
-          <p className="planner-source-note">這些實勘點在路線附近，點開可看原始量測和照片。</p>
-          <EvidenceLinks ids={selected.fieldPointIds} onField={props.onField} />
+        {requests.length > 0 && <details className="planner-details planner-measurement-requests">
+          <summary><span><Ruler size={16} aria-hidden="true" />幫忙補資料（{requests.length}）</span><ChevronDown size={15} aria-hidden="true" /></summary>
+          <p>如果你正好經過，可以補上量測或現場觀察。</p>
+          <ul>{requests.map(({ leg, field, reason }) => <li key={leg.id} data-road-id={leg.way.osmId}>
+            <div><strong>第 {selected.legs.indexOf(leg) + 1} 段 · {leg.name}</strong><span>{reason}</span></div>
+            <button type="button" className="button secondary" onClick={() => props.onReportLeg(leg, field)}>{measurementPrompts[field]}</button>
+          </li>)}</ul>
         </details>}
         {props.preview}
         <div className="planner-actions">
@@ -212,6 +216,15 @@ export default function PlannerPanel(props: Props) {
         {props.shareMessage && <p className="planner-message" role="status">{props.shareMessage}</p>}
         {props.manualLink && <input className="copy-fallback" aria-label="路線分享連結" readOnly value={props.manualLink} onFocus={event => event.target.select()} />}
         <button type="button" className="button plain planner-draft-link" onClick={props.onDraft}>記錄沿途實勘</button>
+        <details className="planner-details">
+          <summary>距離與時間怎麼算<ChevronDown size={15} aria-hidden="true" /></summary>
+          <div className="planner-route-notes">
+            {result.access.some(access => access.offsetM >= 2) && <p>
+              {result.access.map((access, i) => access.offsetM >= 2 ? `${i ? 'B' : 'A'} 接入點距選點 ${formatDistance(access.offsetM)}` : null).filter(Boolean).join('，')}。
+            </p>}
+            <p>按 {estimateSpeedKmh} km/h 估算時間。路線排除圖資已標示的階梯與封閉。</p>
+          </div>
+        </details>
       </>}
     {network && <p className="planner-copyright"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap 貢獻者</a>
       {' · '}<a href={networkUrl} download>路網快照</a> · {formatDate(network.dataAsOf ?? network.retrievedAt)}</p>}
