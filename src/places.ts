@@ -2,7 +2,7 @@ import type {Campus,CatalogCategory,CatalogPlace,NavigationState,PlaceCatalog} f
 import {fieldObservation} from './field-observations'
 import {distance} from './routes'
 
-export const categoryLabels:Record<CatalogCategory,string>={building:'建物',toilet:'廁所',elevator:'電梯',water:'飲水',rest:'休息',ramp:'坡道',landmark:'地標',field:'實勘點'}
+export const categoryLabels:Record<CatalogCategory,string>={building:'建物',toilet:'廁所',elevator:'電梯',water:'飲水',rest:'休息',ramp:'坡道',landmark:'景點',field:'實勘點'}
 export const catalogCategories=Object.keys(categoryLabels) as CatalogCategory[]
 const canonical=(value:string)=>value.normalize('NFKC').toLocaleLowerCase('en').replaceAll('臺','台').replace(/[\s\p{P}]/gu,'')
 export function parsePlaceCatalog(value:unknown):PlaceCatalog{
@@ -13,6 +13,7 @@ export function parsePlaceCatalog(value:unknown):PlaceCatalog{
   for(const p of data.places){
     if(!p||typeof p.id!=='string'||!p.id||p.id.length>120||ids.has(p.id)||typeof p.name!=='string'||!p.name.trim()||!catalogCategories.includes(p.category)||!Array.isArray(p.coordinate)||p.coordinate.length!==2||!p.coordinate.every(Number.isFinite)||Math.abs(p.coordinate[0])>180||Math.abs(p.coordinate[1])>90||!Array.isArray(p.aliases)||!p.aliases.every(a=>typeof a==='string')||p.verifiedAt!==null||!Number.isFinite(Date.parse(p.retrievedAt))||!data.sources.some(s=>s.id===p.sourceId)||!/^https:\/\//.test(p.sourceUrl)||p.routePlaceId!==null&&(!['library','boya'].includes(p.routePlaceId)||p.id!==p.routePlaceId))throw new Error('地點資料有無法使用的欄位')
     for(const key of ['address','openingHours','wheelchair','level','indoor','contextId','note'] as const)if(p[key]!==null&&typeof p[key]!=='string')throw new Error('地點說明格式不完整')
+    if(p.guideUrl!==undefined&&(typeof p.guideUrl!=='string'||!/^https:\/\/visitorcenter\.ntu\.edu\.tw\/News_Content_n_74842_s_\d+\.html$/.test(p.guideUrl)))throw new Error('景點導覽連結格式不完整')
     for(const key of ['widthM','slopePercent'] as const)if(p[key]!==null&&(!Number.isFinite(p[key])||p[key]!<0))throw new Error('地點量測格式不完整')
     if(!Array.isArray(p.photos)||p.photos.some(photo=>typeof photo.src!=='string'||!/^https:\/\/|^\/(?!\/)/.test(photo.src)||typeof photo.alt!=='string'||typeof photo.caption!=='string'))throw new Error('地點照片格式不完整')
     ids.add(p.id)
@@ -26,6 +27,7 @@ export function fallbackPlaces(campus:Campus):PlaceCatalog{
   return{version:1,bbox:[121.534,25.014,121.543,25.021],sources:campus.sources,places:[...campus.places.map(p=>({...base,id:p.id,name:p.name,aliases:p.id==='library'?['總圖','NTU Library']:['博雅','Boya'],category:'building' as const,coordinate:p.coordinate,routePlaceId:p.id,sourceId:p.sourceId,sourceUrl:source(p.sourceId).url,retrievedAt:source(p.sourceId).retrievedAt,note:'建物中心位置，入口需另外確認。'})),...campus.facilities.map(p=>({...base,id:p.id,name:p.name,aliases:['坡道','斜坡道'],category:'ramp' as const,coordinate:p.coordinate,routePlaceId:null,sourceId:p.sourceId,sourceUrl:source(p.sourceId).url,retrievedAt:source(p.sourceId).retrievedAt,widthM:p.widthM,slopePercent:p.slopePercent,note:'公開斜坡道，尚未實地查核。'}))]}
 }
 export function placeCategories(place: CatalogPlace): CatalogCategory[] {
+  if (place.category === 'building' && place.guideUrl) return ['building', 'landmark']
   const facilityCategory = place.category === 'field' ? fieldObservation(place.id)?.facilityCategory : undefined
   return facilityCategory ? [place.category, facilityCategory] : [place.category]
 }
@@ -37,7 +39,7 @@ export function findPlaces(places:CatalogPlace[],query='',category?:CatalogCateg
   return places.filter(place => {
     const categories = placeCategories(place)
     if (category && !categories.includes(category)) return false
-    const haystack = canonical([place.name, ...place.aliases, ...categories.map(value => categoryLabels[value]), place.address ?? ''].join(' '))
+    const haystack = canonical([place.name, ...place.aliases, ...categories.map(value => categoryLabels[value]), categories.includes('landmark') ? '地標' : '', place.address ?? ''].join(' '))
     return words.every(word => haystack.includes(word))
   }).sort((a,b)=>score(a)-score(b)||(reference?distance(a.coordinate,reference)-distance(b.coordinate,reference):0)||a.id.localeCompare(b.id))
 }

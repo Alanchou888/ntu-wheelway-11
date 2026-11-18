@@ -26,6 +26,15 @@ describe('place data snapshots',()=>{
     expect(snapshot.places.every(p=>p.verifiedAt===null&&p.retrievedAt===snapshot.sources.find(s=>s.id===p.sourceId).retrievedAt)).toBe(true)
     const broken=structuredClone(snapshot);broken.places[0].verifiedAt='2026-10-21';expect(()=>validatePlaceCatalog(broken)).toThrow()
   })
+  it('includes the official campus attractions with stable IDs and unverified access',async()=>{
+    const published=validatePlaceCatalog(JSON.parse(await readFile('public/data/places.json','utf8')))
+    const rebuilt=buildPlaceCatalog(campus)
+    const attractions=rebuilt.places.filter(place=>place.guideUrl)
+    expect(attractions).toHaveLength(19)
+    expect(published.places.filter(place=>place.guideUrl)).toEqual(attractions)
+    expect(attractions.find(place=>place.id==='context-relation/2586500')).toMatchObject({name:'臺大校史館',aliases:expect.arrayContaining(['舊總圖書館'])})
+    expect(attractions.every(place=>place.wheelchair===null&&place.verifiedAt===null)).toBe(true)
+  })
   it('keeps an existing snapshot byte for byte when no amenity download ever succeeded',async()=>{
     const dir=await mkdtemp(join(tmpdir(),'wheelway-places-')),path=join(dir,'places.json')
     try{

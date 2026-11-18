@@ -2,9 +2,11 @@ import {readFile,writeFile,rename,rm} from 'node:fs/promises'
 import {fileURLToPath,pathToFileURL} from 'node:url'
 import {dirname,resolve} from 'node:path'
 import {FACILITY_BBOX,inBbox,validCoordinate} from './data-normalization.mjs'
+import {addCampusAttractions, attractionSource, campusAttractions} from './campus-attractions.mjs'
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..')
 export const placesPath=resolve(root,'public/data/places.json')
+export const CATALOG_BBOX=[121.5334,25.0135,121.543,25.022]
 export const OVERPASS_ENDPOINT='https://overpass-api.de/api/interpreter'
 export const OVERPASS_MIRROR='https://overpass.private.coffee/api/interpreter'
 export const OSM_MAP_ENDPOINT='https://api.openstreetmap.org/api/0.6/map.json?bbox=121.535,25.0165,121.5417,25.0205'
@@ -52,22 +54,25 @@ export function buildPlaceCatalog(campus,amenities=[],amenitySource=null){
   const places=campus.places.map(place=>({...common,id:place.id,name:place.name,aliases:place.id==='library'?['總圖','總圖書館','NTU Library','Main Library']:['博雅','Boya'],category:'building',coordinate:place.coordinate,sourceId:'ntu',sourceUrl:sourceById.ntu.url,routePlaceId:place.id,note:'臺大 API 建物中心位置，入口需另外確認。'}))
   for(const feature of campus.context?.features??[]){
     const p=feature.properties??{},name=text(p.name),coordinate=representative(feature.geometry)
+    const curated = campusAttractions.find(attraction => attraction.osm && attraction.osm === feature.id)
+    if (curated && curated.id !== `context-${feature.id}`) continue
     if(!name||!['building','green','water'].includes(p.kind)||!inBbox(coordinate,FACILITY_BBOX)||places.some(place=>[place.name,...place.aliases].includes(name)))continue
     places.push({...common,id:`context-${feature.id}`,name,aliases:[],category:p.kind==='building'?'building':'landmark',coordinate,sourceId:'osm-context',sourceUrl:`https://www.openstreetmap.org/${feature.id}`,contextId:String(feature.id),note:p.kind==='building'?'建物幾何的代表位置，尚未取得可通行入口。':'公開地標位置，尚未查核通行條件。'})
   }
   for(const facility of campus.facilities)places.push({...common,id:facility.id,name:facility.name,aliases:['斜坡道','坡道'],category:'ramp',coordinate:facility.coordinate,sourceId:'wheelroute',sourceUrl:sourceById.wheelroute.url,widthM:facility.widthM,slopePercent:facility.slopePercent,note:'輪行臺北公開斜坡道，原始量測與目前通行狀態待查核。'})
-  const sources=[sourceById.ntu,sourceById.wheelroute,{...sourceById.osm,id:'osm-context',label:'OpenStreetMap 校園建物與地標'}]
+  addCampusAttractions(places, common)
+  const sources=[sourceById.ntu,sourceById.wheelroute,{...sourceById.osm,id:'osm-context',label:'OpenStreetMap 校園建物與地標'},attractionSource]
   if(amenitySource)sources.push(amenitySource)
   places.push(...amenities)
   for(const place of places)place.retrievedAt=sources.find(source=>source.id===place.sourceId)?.retrievedAt??null
-  return validatePlaceCatalog({version:1,bbox:FACILITY_BBOX,sources,places})
+  return validatePlaceCatalog({version:1,bbox:CATALOG_BBOX,sources,places})
 }
 export function validatePlaceCatalog(value){
   if(value?.version!==1||!Array.isArray(value.places)||!value.places.length||!Array.isArray(value.sources))throw new Error('Invalid place catalog')
   const ids=new Set(),categories=['building','toilet','elevator','water','rest','ramp','landmark']
   if(!['library','boya'].every(id=>value.places.some(p=>p.id===id&&p.routePlaceId===id)))throw new Error('Missing campus endpoints')
   for(const p of value.places){
-    if(ids.has(p.id)||!p.id||!text(p.name)||!categories.includes(p.category)||!inBbox(p.coordinate,FACILITY_BBOX)||p.verifiedAt!==null||!/^https:\/\//.test(p.sourceUrl)||!value.sources.some(s=>s.id===p.sourceId&&s.retrievedAt===p.retrievedAt)||!Number.isFinite(Date.parse(p.retrievedAt)))throw new Error('Invalid place entry')
+    if(ids.has(p.id)||!p.id||!text(p.name)||!categories.includes(p.category)||!inBbox(p.coordinate,CATALOG_BBOX)||p.verifiedAt!==null||!/^https:\/\//.test(p.sourceUrl)||!value.sources.some(s=>s.id===p.sourceId&&s.retrievedAt===p.retrievedAt)||!Number.isFinite(Date.parse(p.retrievedAt)))throw new Error('Invalid place entry')
     ids.add(p.id)
   }
   return value

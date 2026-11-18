@@ -9,6 +9,7 @@ export interface CatalogPlace {
   address: string | null; openingHours: string | null; wheelchair: string | null; level: string | null; indoor: string | null
   widthM: number | null; slopePercent: number | null; photos: Photo[]; note: string
   routePlaceId: PlaceId | null; contextId: string | null
+  guideUrl?: string
 }
 export interface PlaceCatalog { version: 1; bbox: number[]; sources: PublicSource[]; places: CatalogPlace[]; amenitiesStatus?: 'unavailable' | 'ok' | 'cached' }
 export type PlaceId = 'library' | 'boya'

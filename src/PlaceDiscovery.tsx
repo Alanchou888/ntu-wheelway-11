@@ -36,7 +36,7 @@ export function PlaceSearch({places,query,category,selected,recent,onQuery,onCho
   const root=useRef<HTMLDivElement>(null)
   const more=useRef<HTMLDetailsElement>(null)
   const availableCategories=new Set(places.flatMap(placeCategories))
-  const quickCategories=facilityCategories.filter(value=>(value==='field'||value==='ramp')&&availableCategories.has(value))
+  const quickCategories=facilityCategories.filter(value=>(value==='field'||value==='ramp'||value==='landmark')&&availableCategories.has(value))
   const extraCategories=facilityCategories.filter(value=>!quickCategories.includes(value))
   const matched=findPlaces(places,query)
   const recentPlaces=recent.flatMap(id=>places.find(p=>p.id===id)??[])
@@ -69,15 +69,15 @@ export function PlaceSearch({places,query,category,selected,recent,onQuery,onCho
         })}</ul>
         {!options.length&&<p className="suggestions-empty">找不到「{query.slice(0,50)}」。試試「總圖」「博雅」或設施類別。</p>}
         <button className="suggestions-all" onClick={()=>{setOpen(false);onBrowse()}}>查看{query.trim()?'全部搜尋結果':'地點清單'}<ArrowRight size={16}/></button>
-        <p className="suggestions-scope">搜尋總圖與博雅周邊的設施和實勘點</p>
+        <p className="suggestions-scope">搜尋臺大校總區景點、設施和實勘點</p>
       </div>}
     </div>
-    <div className="place-category-strip" role="group" aria-label="附近設施分類">
+    <div className="place-category-strip" role="group" aria-label="地點分類">
       {quickCategories.map(value=><button key={value} className={category===value?'selected':''} aria-pressed={category===value} onClick={()=>{setOpen(false);if(more.current)more.current.open=false;onCategory(value)}}><PlaceIcon category={value} size={17}/><span>{categoryLabels[value]}</span></button>)}
       <details className="facility-more" ref={more} onToggle={event=>{if(event.currentTarget.open)setOpen(false)}} onKeyDown={event=>{
         if(event.key==='Escape'&&more.current?.open){event.preventDefault();event.stopPropagation();more.current.open=false;more.current.querySelector('summary')?.focus()}
       }}>
-        <summary className={category&&extraCategories.includes(category)?'selected':undefined}>更多設施<ChevronDown size={16} aria-hidden="true"/></summary>
+        <summary aria-label="更多設施" className={category&&extraCategories.includes(category)?'selected':undefined}>更多<ChevronDown size={16} aria-hidden="true"/></summary>
         <div className="facility-options" role="group" aria-label="更多設施分類">
           {extraCategories.map(value=><button key={value} className={category===value?'selected':''} aria-pressed={category===value} onClick={()=>{if(more.current)more.current.open=false;onCategory(value)}}>
             <PlaceIcon category={value} size={17}/><span>{categoryLabels[value]}{!availableCategories.has(value)&&<small>資料暫缺</small>}</span>
@@ -197,6 +197,9 @@ export function PlaceCard({place,catalog,entrances,mode,onClose,onEndpoint,onPla
     {googleMapsQuery && <a className="place-external-map" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(googleMapsQuery)}`} target="_blank" rel="noreferrer">
       <MapPin size={17} aria-hidden="true" />在 Google 地圖查看<ArrowUpRight size={15} aria-hidden="true" />
     </a>}
+    {place.guideUrl && <div><a className="place-external-map" href={place.guideUrl} target="_blank" rel="noreferrer">
+      臺大官方景點介紹<ArrowUpRight size={15} aria-hidden="true" />
+    </a></div>}
     {place.routePlaceId&&<p className="place-route-scope connected">地圖上的館名標示建物中心，路線起終點另有標記。</p>}
     <dl className="place-facts">
       {place.note&&!place.routePlaceId&&<div><dt>位置</dt><dd>{place.note}</dd></div>}
